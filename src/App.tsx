@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BarChart3,
+  Bell,
   CheckSquare,
   Folder,
   FolderKanban,
+  FolderOpen,
   Layers,
   Lock,
   Menu,
@@ -12,18 +14,21 @@ import {
   Search,
   Settings,
   Sun,
+  Trash2,
   Wifi,
   X,
 } from 'lucide-react';
 import {
+  AppNotification,
   LanguageCode,
   PhotoTargetRef,
   SelectedSidebarNode,
   TaskAttachment,
   TaskItem,
+  TrashItem,
   WorkspaceState,
 } from './types/task';
-import { TRANSLATIONS } from './i18n/translations';
+import { resolveLocalizedText, TRANSLATIONS } from './i18n/translations';
 import {
   addAttachmentToTask,
   addPhotoToTodoInTask,
@@ -32,20 +37,29 @@ import {
   addTodoToTask,
   addUpdateToTask,
   annotatePhotoInTask,
+  appendNotification,
+  clearAllNotifications,
   computeProjectMetrics,
   createFolder,
   createProject,
+  deleteTrashItemPermanently,
   deriveTaskStatus,
   editAttachmentInTask,
   editSubTodoInTask,
   editTodoInTask,
   editUpdateInTask,
-  removeFolder,
-  removePhotoFromTodoInTask,
-  removePhotoFromUpdateInTask,
-  removeProject,
-  removeSubTodoFromTask,
-  removeTodoFromTask,
+  emptyTrash,
+  generateDueTaskReminders,
+  markAllNotificationsRead,
+  markNotificationRead,
+  moveAttachmentToTrash,
+  moveFolderToTrash,
+  moveProjectToTrash,
+  moveSubTodoToTrash,
+  moveTaskToTrash,
+  moveTodoToTrash,
+  moveUpdateToTrash,
+  restoreTrashItem,
   searchWorkspace,
   toggleSubTodoInTask,
   toggleTodoInTask,
@@ -65,6 +79,11 @@ import {
   saveWorkspaceToLocalStorage,
   setSessionUnlocked,
 } from './utils/offlineStorage';
+import {
+  loadLocalFolderMeta,
+  LocalFolderSyncMeta,
+  overwriteLocalSaveFile,
+} from './utils/localFolderSync';
 import { SidebarTree } from './components/SidebarTree';
 import { FolderDetailView } from './components/FolderDetailView';
 import { ProjectDetailView } from './components/ProjectDetailView';
@@ -75,13 +94,29 @@ import { NewTaskModal } from './components/NewTaskModal';
 import { PriorityBadge } from './components/PriorityBadge';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { AppLockScreen } from './components/AppLockScreen';
+import { ConfirmDeleteModal, ConfirmDeleteState } from './components/ConfirmDeleteModal';
+import { TrashView } from './components/TrashView';
+import { NotificationCenter } from './components/NotificationCenter';
 
 export default function App() {
-  const [workspace, setWorkspace] = useState<WorkspaceState>(() =>
-    loadWorkspaceFromLocalStorage()
-  );
-  const [syncMeta, setSyncMeta] = useState<OfflineSyncMeta>(() => loadSyncMeta());
   const [lang, setLangState] = useState<LanguageCode>(() => loadSavedLanguage());
+  const t = TRANSLATIONS[lang];
+  const isRtl = lang === 'ar' || lang === 'he';
+
+  const [workspace, setWorkspace] = useState<WorkspaceState>(() => {
+    const initial = loadWorkspaceFromLocalStorage();
+    return generateDueTaskReminders(initial, new Date(), {
+      overdueTitle: TRANSLATIONS[loadSavedLanguage()].overdueReminderTitle,
+      dueTodayTitle: TRANSLATIONS[loadSavedLanguage()].dueTodayReminderTitle,
+      dueTomorrowTitle: TRANSLATIONS[loadSavedLanguage()].dueTomorrowReminderTitle,
+    });
+  });
+
+  const [syncMeta, setSyncMeta] = useState<OfflineSyncMeta>(() => loadSyncMeta());
+  const [localFolderMeta, setLocalFolderMeta] = useState<LocalFolderSyncMeta>(() =>
+    loadLocalFolderMeta()
+  );
+
   const [selectedNode, setSelectedNode] = useState<SelectedSidebarNode>(() => {
     const initial = loadWorkspaceFromLocalStorage();
     if (initial.projects[0]) {
@@ -103,8 +138,45 @@ export default function App() {
     projectId?: string;
   }>({ isOpen: false });
 
-  const t = TRANSLATIONS[lang];
-  const isRtl = lang === 'ar' || lang === 'he';
+  // Confirmation modal state for all deletions across the app
+  const [confirmDeleteState, setConfirmDeleteState] =
+    useState<ConfirmDeleteState | null>(null);
+
+  // Live toast notification banner state
+  const [liveToast, setLiveToast] = useState<{
+    id: string;
+    title: string;
+    message: string;
+    targetNode?: SelectedSidebarNode;
+  } | null>(null);
+
+  const showToast = (
+    title: string,
+    message: string,
+    targetNode?: SelectedSidebarNode
+  ) => {
+    const toastId = `toast-${Date.now()}`;
+    setLiveToast({ id: toastId, title, message, targetNode });
+    if (
+      typeof window !== 'undefined' &&
+      'Notification' in window &&
+      window.Notification.permission === 'granted'
+    ) {
+      try {
+        new window.Notification(title, { body: message, icon: './pwa-192x192.png' });
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!liveToast) return;
+    const timer = window.setTimeout(() => {
+      setLiveToast(null);
+    }, 4500);
+    return () => window.clearTimeout(timer);
+  }, [liveToast]);
 
   const setLang = (nextLang: LanguageCode) => {
     saveLanguage(nextLang);
@@ -136,6 +208,28 @@ export default function App() {
     saveTheme(isDarkMode);
   }, [isDarkMode]);
 
+  // Periodic background due-date & due-time reminder check every 60 seconds
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setWorkspace((prev) => {
+        const scanned = generateDueTaskReminders(prev, new Date(), {
+          overdueTitle: t.overdueReminderTitle,
+          dueTodayTitle: t.dueTodayReminderTitle,
+          dueTomorrowTitle: t.dueTomorrowReminderTitle,
+        });
+        if (
+          (scanned.notifications?.length || 0) !==
+          (prev.notifications?.length || 0)
+        ) {
+          saveWorkspaceToLocalStorage(scanned, syncMeta);
+          return scanned;
+        }
+        return prev;
+      });
+    }, 60000);
+    return () => window.clearInterval(interval);
+  }, [t.overdueReminderTitle, t.dueTodayReminderTitle, t.dueTomorrowReminderTitle, syncMeta]);
+
   // Close global search dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -152,10 +246,26 @@ export default function App() {
 
   const commitWorkspace = (updater: (prev: WorkspaceState) => WorkspaceState) => {
     setWorkspace((prev) => {
-      const next = updater(prev);
-      const nextMeta = saveWorkspaceToLocalStorage(next, syncMeta);
+      const updated = updater(prev);
+      const withReminders = generateDueTaskReminders(updated, new Date(), {
+        overdueTitle: t.overdueReminderTitle,
+        dueTodayTitle: t.dueTodayReminderTitle,
+        dueTomorrowTitle: t.dueTomorrowReminderTitle,
+      });
+      const nextMeta = saveWorkspaceToLocalStorage(withReminders, syncMeta);
       setSyncMeta(nextMeta);
-      return next;
+
+      // Automatically overwrite the single file (`masar_workspace_autosave.json`) in the chosen local folder
+      const currentFolderMeta = loadLocalFolderMeta();
+      if (currentFolderMeta.isConnected) {
+        overwriteLocalSaveFile(withReminders, lang, isDarkMode, false).then(
+          (updatedFolderMeta) => {
+            setLocalFolderMeta(updatedFolderMeta);
+          }
+        );
+      }
+
+      return withReminders;
     });
   };
 
@@ -169,36 +279,91 @@ export default function App() {
     [workspace, globalSearchQuery, lang]
   );
 
-  // Folder CRUD
+  const trashItems = workspace.trash || [];
+  const notifications = workspace.notifications || [];
+  const unreadNotificationsCount = useMemo(
+    () => notifications.filter((n) => !n.read).length,
+    [notifications]
+  );
+
+  // ============================================================================
+  // FOLDER CRUD (WITH NOTIFICATION & CONFIRM DELETE -> TRASH)
+  // ============================================================================
   const handleCreateFolder = (name: string) => {
     commitWorkspace((prev) => {
       const res = createFolder(prev, name);
       if (res.createdFolder) {
         setSelectedNode({ type: 'folder', id: res.createdFolder.id });
+        showToast(
+          `${t.notifCreatedLabel}: ${t.folderTypeLabel}`,
+          res.createdFolder.name,
+          { type: 'folder', id: res.createdFolder.id }
+        );
+        return appendNotification(res.state, {
+          category: 'change',
+          section: 'folder',
+          title: `${t.notifCreatedLabel}: ${t.folderTypeLabel}`,
+          message: res.createdFolder.name,
+          targetNode: { type: 'folder', id: res.createdFolder.id },
+        });
       }
       return res.state;
     });
   };
 
   const handleUpdateFolder = (folderId: string, name: string) => {
-    commitWorkspace((prev) => updateFolder(prev, folderId, name));
-  };
-
-  const handleDeleteFolder = (folderId: string) => {
     commitWorkspace((prev) => {
-      const next = removeFolder(prev, folderId);
-      if (selectedNode.type === 'folder' && selectedNode.id === folderId) {
-        if (next.folders[0]) {
-          setSelectedNode({ type: 'folder', id: next.folders[0].id });
-        } else {
-          setSelectedNode({ type: 'dashboard' });
-        }
-      }
-      return next;
+      const next = updateFolder(prev, folderId, name);
+      showToast(`${t.notifUpdatedLabel}: ${t.folderTypeLabel}`, name, {
+        type: 'folder',
+        id: folderId,
+      });
+      return appendNotification(next, {
+        category: 'change',
+        section: 'folder',
+        title: `${t.notifUpdatedLabel}: ${t.folderTypeLabel}`,
+        message: name,
+        targetNode: { type: 'folder', id: folderId },
+      });
     });
   };
 
-  // Project CRUD
+  const handleDeleteFolder = (folderId: string) => {
+    const folder = workspace.folders.find((f) => f.id === folderId);
+    if (!folder) return;
+    const folderName = resolveLocalizedText(folder.name, folder.localizedName, lang);
+
+    setConfirmDeleteState({
+      isOpen: true,
+      itemName: folderName,
+      itemTypeBadge: t.folderTypeLabel,
+      isPermanent: false,
+      onConfirm: () => {
+        commitWorkspace((prev) => {
+          const next = moveFolderToTrash(prev, folderId);
+          if (selectedNode.type === 'folder' && selectedNode.id === folderId) {
+            if (next.folders[0]) {
+              setSelectedNode({ type: 'folder', id: next.folders[0].id });
+            } else {
+              setSelectedNode({ type: 'dashboard' });
+            }
+          }
+          showToast(t.notifMovedToTrashLabel, folderName, { type: 'trash' });
+          return appendNotification(next, {
+            category: 'trash',
+            section: 'folder',
+            title: `${t.notifMovedToTrashLabel}: ${t.folderTypeLabel}`,
+            message: folderName,
+            targetNode: { type: 'trash' },
+          });
+        });
+      },
+    });
+  };
+
+  // ============================================================================
+  // PROJECT CRUD (WITH NOTIFICATION & CONFIRM DELETE -> TRASH)
+  // ============================================================================
   const handleCreateProject = (
     folderId: string,
     name: string,
@@ -208,6 +373,18 @@ export default function App() {
       const res = createProject(prev, folderId, name, description);
       if (res.createdProject) {
         setSelectedNode({ type: 'project', id: res.createdProject.id });
+        showToast(
+          `${t.notifCreatedLabel}: ${t.projectTypeLabel}`,
+          res.createdProject.name,
+          { type: 'project', id: res.createdProject.id }
+        );
+        return appendNotification(res.state, {
+          category: 'change',
+          section: 'project',
+          title: `${t.notifCreatedLabel}: ${t.projectTypeLabel}`,
+          message: res.createdProject.name,
+          targetNode: { type: 'project', id: res.createdProject.id },
+        });
       }
       return res.state;
     });
@@ -217,30 +394,83 @@ export default function App() {
     projectId: string,
     patch: { name?: string; description?: string }
   ) => {
-    commitWorkspace((prev) => updateProject(prev, projectId, patch));
+    commitWorkspace((prev) => {
+      const next = updateProject(prev, projectId, patch);
+      const proj = next.projects.find((p) => p.id === projectId);
+      const label = proj
+        ? resolveLocalizedText(proj.name, proj.localizedName, lang)
+        : patch.name || '';
+      showToast(`${t.notifUpdatedLabel}: ${t.projectTypeLabel}`, label, {
+        type: 'project',
+        id: projectId,
+      });
+      return appendNotification(next, {
+        category: 'change',
+        section: 'project',
+        title: `${t.notifUpdatedLabel}: ${t.projectTypeLabel}`,
+        message: label,
+        targetNode: { type: 'project', id: projectId },
+      });
+    });
   };
 
   const handleDeleteProject = (projectId: string) => {
     const targetProj = workspace.projects.find((p) => p.id === projectId);
-    commitWorkspace((prev) => {
-      const next = removeProject(prev, projectId);
-      if (selectedNode.type === 'project' && selectedNode.id === projectId) {
-        if (targetProj) {
-          setSelectedNode({ type: 'folder', id: targetProj.folderId });
-        } else {
-          setSelectedNode({ type: 'dashboard' });
-        }
-      }
-      return next;
+    if (!targetProj) return;
+    const projName = resolveLocalizedText(
+      targetProj.name,
+      targetProj.localizedName,
+      lang
+    );
+
+    setConfirmDeleteState({
+      isOpen: true,
+      itemName: projName,
+      itemTypeBadge: t.projectTypeLabel,
+      isPermanent: false,
+      onConfirm: () => {
+        commitWorkspace((prev) => {
+          const next = moveProjectToTrash(prev, projectId);
+          if (selectedNode.type === 'project' && selectedNode.id === projectId) {
+            setSelectedNode({ type: 'folder', id: targetProj.folderId });
+          }
+          showToast(t.notifMovedToTrashLabel, projName, { type: 'trash' });
+          return appendNotification(next, {
+            category: 'trash',
+            section: 'project',
+            title: `${t.notifMovedToTrashLabel}: ${t.projectTypeLabel}`,
+            message: projName,
+            targetNode: { type: 'trash' },
+          });
+        });
+      },
     });
   };
 
-  // Task CRUD
+  // ============================================================================
+  // TASK CRUD (WITH NOTIFICATION, REMINDER & CONFIRM DELETE -> TRASH)
+  // ============================================================================
   const handleCreateTask = (newTask: TaskItem) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: [newTask, ...prev.tasks],
-    }));
+    commitWorkspace((prev) => {
+      const withTask: WorkspaceState = {
+        ...prev,
+        tasks: [newTask, ...prev.tasks],
+      };
+      showToast(
+        `${t.notifCreatedLabel}: ${t.taskTypeLabel}`,
+        `${newTask.title} (${newTask.dueDate}${newTask.dueTime ? ` · ${newTask.dueTime}` : ''})`,
+        { type: 'task', id: newTask.id }
+      );
+      return appendNotification(withTask, {
+        category: 'change',
+        section: 'task',
+        title: `${t.notifCreatedLabel}: ${t.taskTypeLabel}`,
+        message: `${newTask.title} — ${t.dueDateLabel}: ${newTask.dueDate}${
+          newTask.dueTime ? ` (${newTask.dueTime})` : ''
+        }`,
+        targetNode: { type: 'task', id: newTask.id },
+      });
+    });
     setSelectedNode({ type: 'task', id: newTask.id });
   };
 
@@ -249,13 +479,19 @@ export default function App() {
     patch: Partial<
       Pick<
         TaskItem,
-        'status' | 'priority' | 'manualProgress' | 'dueDate' | 'title' | 'description'
+        | 'status'
+        | 'priority'
+        | 'manualProgress'
+        | 'dueDate'
+        | 'dueTime'
+        | 'title'
+        | 'description'
       >
     >
   ) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) => {
+    commitWorkspace((prev) => {
+      let updatedTaskTitle = '';
+      const nextTasks = prev.tasks.map((tsk) => {
         if (tsk.id !== taskId) return tsk;
         const updated: TaskItem = {
           ...tsk,
@@ -268,38 +504,97 @@ export default function App() {
         if (patch.manualProgress !== undefined && updated.todos.length === 0) {
           updated.status = deriveTaskStatus(updated.status, patch.manualProgress);
         }
+        updatedTaskTitle = resolveLocalizedText(
+          updated.title,
+          updated.localizedTitle,
+          lang
+        );
         return updated;
-      }),
-    }));
+      });
+
+      const isDueChanged = patch.dueDate !== undefined || patch.dueTime !== undefined;
+      const notifTitle = isDueChanged
+        ? `${t.notifUpdatedLabel}: ${t.dueDateLabel}`
+        : `${t.notifUpdatedLabel}: ${t.taskTypeLabel}`;
+      showToast(notifTitle, updatedTaskTitle, { type: 'task', id: taskId });
+
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: isDueChanged ? 'reminder' : 'change',
+          section: 'task',
+          title: notifTitle,
+          message: updatedTaskTitle,
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
   };
 
   const handleDeleteTask = (taskId: string) => {
     const targetTask = workspace.tasks.find((tsk) => tsk.id === taskId);
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.filter((tsk) => tsk.id !== taskId),
-    }));
-    if (selectedNode.type === 'task' && selectedNode.id === taskId) {
-      if (targetTask?.projectId) {
-        setSelectedNode({ type: 'project', id: targetTask.projectId });
-      } else {
-        setSelectedNode({ type: 'dashboard' });
-      }
-    }
+    if (!targetTask) return;
+    const taskTitle = resolveLocalizedText(
+      targetTask.title,
+      targetTask.localizedTitle,
+      lang
+    );
+
+    setConfirmDeleteState({
+      isOpen: true,
+      itemName: taskTitle,
+      itemTypeBadge: t.taskTypeLabel,
+      isPermanent: false,
+      onConfirm: () => {
+        commitWorkspace((prev) => {
+          const next = moveTaskToTrash(prev, taskId);
+          showToast(t.notifMovedToTrashLabel, taskTitle, { type: 'trash' });
+          return appendNotification(next, {
+            category: 'trash',
+            section: 'task',
+            title: `${t.notifMovedToTrashLabel}: ${t.taskTypeLabel}`,
+            message: taskTitle,
+            targetNode: { type: 'trash' },
+          });
+        });
+        if (selectedNode.type === 'task' && selectedNode.id === taskId) {
+          if (targetTask.projectId) {
+            setSelectedNode({ type: 'project', id: targetTask.projectId });
+          } else {
+            setSelectedNode({ type: 'dashboard' });
+          }
+        }
+      },
+    });
   };
 
-  // Nested To-Do CRUD + To-Do Photos
+  // ============================================================================
+  // TO-DO & SUB-TO-DO CRUD (WITH NOTIFICATION & CONFIRM DELETE -> TRASH)
+  // ============================================================================
   const handleAddTodo = (
     taskId: string,
     title: string,
     photos?: Omit<TaskAttachment, 'id' | 'addedAt'>[]
   ) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
+    commitWorkspace((prev) => {
+      const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId ? addTodoToTask(tsk, title, photos) : tsk
-      ),
-    }));
+      );
+      showToast(`${t.notifCreatedLabel}: ${t.todoTypeLabel}`, title, {
+        type: 'task',
+        id: taskId,
+      });
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: 'change',
+          section: 'todo',
+          title: `${t.notifCreatedLabel}: ${t.todoTypeLabel}`,
+          message: title,
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
   };
 
   const handleAddPhotoToTodo = (
@@ -307,12 +602,25 @@ export default function App() {
     todoId: string,
     photo: Omit<TaskAttachment, 'id' | 'addedAt'>
   ) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
+    commitWorkspace((prev) => {
+      const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId ? addPhotoToTodoInTask(tsk, todoId, photo) : tsk
-      ),
-    }));
+      );
+      showToast(`${t.notifCreatedLabel}: ${t.attachmentTypeLabel}`, photo.name, {
+        type: 'task',
+        id: taskId,
+      });
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: 'update',
+          section: 'attachment',
+          title: `${t.notifCreatedLabel}: ${t.attachmentTypeLabel}`,
+          message: photo.name,
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
   };
 
   const handleDeletePhotoFromTodo = (
@@ -320,57 +628,149 @@ export default function App() {
     todoId: string,
     photoId: string
   ) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
-        tsk.id === taskId ? removePhotoFromTodoInTask(tsk, todoId, photoId) : tsk
-      ),
-    }));
+    const task = workspace.tasks.find((t) => t.id === taskId);
+    const todo = task?.todos.find((td) => td.id === todoId);
+    const photo = todo?.photos?.find((p) => p.id === photoId);
+    if (!photo) return;
+
+    setConfirmDeleteState({
+      isOpen: true,
+      itemName: photo.name,
+      itemTypeBadge: t.attachmentTypeLabel,
+      isPermanent: false,
+      onConfirm: () => {
+        commitWorkspace((prev) => {
+          const next = moveAttachmentToTrash(prev, taskId, 'todo', photoId, todoId);
+          showToast(t.notifMovedToTrashLabel, photo.name, { type: 'trash' });
+          return appendNotification(next, {
+            category: 'trash',
+            section: 'attachment',
+            title: `${t.notifMovedToTrashLabel}: ${t.attachmentTypeLabel}`,
+            message: photo.name,
+            targetNode: { type: 'trash' },
+          });
+        });
+      },
+    });
   };
 
   const handleEditTodo = (taskId: string, todoId: string, newTitle: string) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
+    commitWorkspace((prev) => {
+      const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId ? editTodoInTask(tsk, todoId, newTitle) : tsk
-      ),
-    }));
+      );
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: 'change',
+          section: 'todo',
+          title: `${t.notifUpdatedLabel}: ${t.todoTypeLabel}`,
+          message: newTitle,
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
   };
 
   const handleToggleTodo = (taskId: string, todoId: string) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
+    commitWorkspace((prev) => {
+      const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId ? toggleTodoInTask(tsk, todoId) : tsk
-      ),
-    }));
+      );
+      const targetTask = nextTasks.find((t) => t.id === taskId);
+      const targetTodo = targetTask?.todos.find((td) => td.id === todoId);
+      const todoTitle = targetTodo
+        ? resolveLocalizedText(targetTodo.title, targetTodo.localizedTitle, lang)
+        : '';
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: 'change',
+          section: 'todo',
+          title: `${
+            targetTodo?.completed ? t.notifCompletedLabel : t.notifUpdatedLabel
+          }: ${t.todoTypeLabel}`,
+          message: todoTitle,
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
   };
 
   const handleDeleteTodo = (taskId: string, todoId: string) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
-        tsk.id === taskId ? removeTodoFromTask(tsk, todoId) : tsk
-      ),
-    }));
+    const task = workspace.tasks.find((t) => t.id === taskId);
+    const todo = task?.todos.find((td) => td.id === todoId);
+    if (!todo) return;
+    const todoTitle = resolveLocalizedText(todo.title, todo.localizedTitle, lang);
+
+    setConfirmDeleteState({
+      isOpen: true,
+      itemName: todoTitle,
+      itemTypeBadge: t.todoTypeLabel,
+      isPermanent: false,
+      onConfirm: () => {
+        commitWorkspace((prev) => {
+          const next = moveTodoToTrash(prev, taskId, todoId);
+          showToast(t.notifMovedToTrashLabel, todoTitle, { type: 'trash' });
+          return appendNotification(next, {
+            category: 'trash',
+            section: 'todo',
+            title: `${t.notifMovedToTrashLabel}: ${t.todoTypeLabel}`,
+            message: todoTitle,
+            targetNode: { type: 'trash' },
+          });
+        });
+      },
+    });
   };
 
   const handleAddSubTodo = (taskId: string, todoId: string, title: string) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
+    commitWorkspace((prev) => {
+      const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId ? addSubTodoToTask(tsk, todoId, title) : tsk
-      ),
-    }));
+      );
+      showToast(`${t.notifCreatedLabel}: ${t.subTodoTypeLabel}`, title, {
+        type: 'task',
+        id: taskId,
+      });
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: 'change',
+          section: 'subtodo',
+          title: `${t.notifCreatedLabel}: ${t.subTodoTypeLabel}`,
+          message: title,
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
   };
 
   const handleToggleSubTodo = (taskId: string, todoId: string, subTodoId: string) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
+    commitWorkspace((prev) => {
+      const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId ? toggleSubTodoInTask(tsk, todoId, subTodoId) : tsk
-      ),
-    }));
+      );
+      const targetTask = nextTasks.find((t) => t.id === taskId);
+      const targetSub = targetTask?.todos
+        .find((td) => td.id === todoId)
+        ?.subTodos?.find((s) => s.id === subTodoId);
+      const subTitle = targetSub
+        ? resolveLocalizedText(targetSub.title, targetSub.localizedTitle, lang)
+        : '';
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: 'change',
+          section: 'subtodo',
+          title: `${
+            targetSub?.completed ? t.notifCompletedLabel : t.notifUpdatedLabel
+          }: ${t.subTodoTypeLabel}`,
+          message: subTitle,
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
   };
 
   const handleEditSubTodo = (
@@ -379,24 +779,54 @@ export default function App() {
     subTodoId: string,
     newTitle: string
   ) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
+    commitWorkspace((prev) => {
+      const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId ? editSubTodoInTask(tsk, todoId, subTodoId, newTitle) : tsk
-      ),
-    }));
+      );
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: 'change',
+          section: 'subtodo',
+          title: `${t.notifUpdatedLabel}: ${t.subTodoTypeLabel}`,
+          message: newTitle,
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
   };
 
   const handleDeleteSubTodo = (taskId: string, todoId: string, subTodoId: string) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
-        tsk.id === taskId ? removeSubTodoFromTask(tsk, todoId, subTodoId) : tsk
-      ),
-    }));
+    const task = workspace.tasks.find((t) => t.id === taskId);
+    const todo = task?.todos.find((td) => td.id === todoId);
+    const sub = todo?.subTodos?.find((s) => s.id === subTodoId);
+    if (!sub) return;
+    const subTitle = resolveLocalizedText(sub.title, sub.localizedTitle, lang);
+
+    setConfirmDeleteState({
+      isOpen: true,
+      itemName: subTitle,
+      itemTypeBadge: t.subTodoTypeLabel,
+      isPermanent: false,
+      onConfirm: () => {
+        commitWorkspace((prev) => {
+          const next = moveSubTodoToTrash(prev, taskId, todoId, subTodoId);
+          showToast(t.notifMovedToTrashLabel, subTitle, { type: 'trash' });
+          return appendNotification(next, {
+            category: 'trash',
+            section: 'subtodo',
+            title: `${t.notifMovedToTrashLabel}: ${t.subTodoTypeLabel}`,
+            message: subTitle,
+            targetNode: { type: 'trash' },
+          });
+        });
+      },
+    });
   };
 
-  // Task Updates CRUD + Update Photos
+  // ============================================================================
+  // TASK UPDATES & ATTACHMENTS CRUD (WITH NOTIFICATION & CONFIRM DELETE -> TRASH)
+  // ============================================================================
   const handleAddUpdate = (
     taskId: string,
     update: {
@@ -406,12 +836,25 @@ export default function App() {
       photos?: Omit<TaskAttachment, 'id' | 'addedAt'>[];
     }
   ) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
+    commitWorkspace((prev) => {
+      const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId ? addUpdateToTask(tsk, update) : tsk
-      ),
-    }));
+      );
+      showToast(`${t.notifCreatedLabel}: ${t.updateTypeLabel}`, update.content, {
+        type: 'task',
+        id: taskId,
+      });
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: 'update',
+          section: 'update',
+          title: `${t.notifCreatedLabel}: ${t.updateTypeLabel}`,
+          message: update.content,
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
   };
 
   const handleAddPhotoToUpdate = (
@@ -419,12 +862,25 @@ export default function App() {
     updateId: string,
     photo: Omit<TaskAttachment, 'id' | 'addedAt'>
   ) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
+    commitWorkspace((prev) => {
+      const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId ? addPhotoToUpdateInTask(tsk, updateId, photo) : tsk
-      ),
-    }));
+      );
+      showToast(`${t.notifCreatedLabel}: ${t.attachmentTypeLabel}`, photo.name, {
+        type: 'task',
+        id: taskId,
+      });
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: 'update',
+          section: 'attachment',
+          title: `${t.notifCreatedLabel}: ${t.attachmentTypeLabel}`,
+          message: photo.name,
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
   };
 
   const handleDeletePhotoFromUpdate = (
@@ -432,14 +888,30 @@ export default function App() {
     updateId: string,
     photoId: string
   ) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
-        tsk.id === taskId
-          ? removePhotoFromUpdateInTask(tsk, updateId, photoId)
-          : tsk
-      ),
-    }));
+    const task = workspace.tasks.find((t) => t.id === taskId);
+    const upd = task?.updates.find((u) => u.id === updateId);
+    const photo = upd?.photos?.find((p) => p.id === photoId);
+    if (!photo) return;
+
+    setConfirmDeleteState({
+      isOpen: true,
+      itemName: photo.name,
+      itemTypeBadge: t.attachmentTypeLabel,
+      isPermanent: false,
+      onConfirm: () => {
+        commitWorkspace((prev) => {
+          const next = moveAttachmentToTrash(prev, taskId, 'update', photoId, updateId);
+          showToast(t.notifMovedToTrashLabel, photo.name, { type: 'trash' });
+          return appendNotification(next, {
+            category: 'trash',
+            section: 'attachment',
+            title: `${t.notifMovedToTrashLabel}: ${t.attachmentTypeLabel}`,
+            message: photo.name,
+            targetNode: { type: 'trash' },
+          });
+        });
+      },
+    });
   };
 
   const handleEditUpdate = (
@@ -447,40 +919,73 @@ export default function App() {
     updateId: string,
     patch: { content: string; timestamp?: string; author?: string }
   ) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
+    commitWorkspace((prev) => {
+      const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId ? editUpdateInTask(tsk, updateId, patch) : tsk
-      ),
-    }));
+      );
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: 'update',
+          section: 'update',
+          title: `${t.notifUpdatedLabel}: ${t.updateTypeLabel}`,
+          message: patch.content,
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
   };
 
   const handleDeleteUpdate = (taskId: string, updateId: string) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
-        tsk.id === taskId
-          ? {
-              ...tsk,
-              updates: tsk.updates.filter((u) => u.id !== updateId),
-              updatedAt: new Date().toISOString(),
-            }
-          : tsk
-      ),
-    }));
+    const task = workspace.tasks.find((t) => t.id === taskId);
+    const upd = task?.updates.find((u) => u.id === updateId);
+    if (!upd) return;
+    const updText = resolveLocalizedText(upd.content, upd.localizedContent, lang);
+
+    setConfirmDeleteState({
+      isOpen: true,
+      itemName: updText,
+      itemTypeBadge: t.updateTypeLabel,
+      isPermanent: false,
+      onConfirm: () => {
+        commitWorkspace((prev) => {
+          const next = moveUpdateToTrash(prev, taskId, updateId);
+          showToast(t.notifMovedToTrashLabel, updText, { type: 'trash' });
+          return appendNotification(next, {
+            category: 'trash',
+            section: 'update',
+            title: `${t.notifMovedToTrashLabel}: ${t.updateTypeLabel}`,
+            message: updText,
+            targetNode: { type: 'trash' },
+          });
+        });
+      },
+    });
   };
 
-  // Attachments CRUD + Cross-Section Photo Annotation
   const handleAddAttachment = (
     taskId: string,
     attachment: Omit<TaskAttachment, 'id' | 'addedAt'>
   ) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
+    commitWorkspace((prev) => {
+      const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId ? addAttachmentToTask(tsk, attachment) : tsk
-      ),
-    }));
+      );
+      showToast(`${t.notifCreatedLabel}: ${t.attachmentTypeLabel}`, attachment.name, {
+        type: 'task',
+        id: taskId,
+      });
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: 'update',
+          section: 'attachment',
+          title: `${t.notifCreatedLabel}: ${t.attachmentTypeLabel}`,
+          message: attachment.name,
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
   };
 
   const handleEditAttachment = (
@@ -488,29 +993,47 @@ export default function App() {
     attachmentId: string,
     patch: { name?: string; caption?: string }
   ) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
-        tsk.id === taskId
-          ? editAttachmentInTask(tsk, attachmentId, patch)
-          : tsk
-      ),
-    }));
+    commitWorkspace((prev) => {
+      const nextTasks = prev.tasks.map((tsk) =>
+        tsk.id === taskId ? editAttachmentInTask(tsk, attachmentId, patch) : tsk
+      );
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: 'update',
+          section: 'attachment',
+          title: `${t.notifUpdatedLabel}: ${t.attachmentTypeLabel}`,
+          message: patch.name || patch.caption || '',
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
   };
 
   const handleDeleteAttachment = (taskId: string, attachmentId: string) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
-        tsk.id === taskId
-          ? {
-              ...tsk,
-              attachments: tsk.attachments.filter((a) => a.id !== attachmentId),
-              updatedAt: new Date().toISOString(),
-            }
-          : tsk
-      ),
-    }));
+    const task = workspace.tasks.find((t) => t.id === taskId);
+    const att = task?.attachments.find((a) => a.id === attachmentId);
+    if (!att) return;
+
+    setConfirmDeleteState({
+      isOpen: true,
+      itemName: att.name,
+      itemTypeBadge: t.attachmentTypeLabel,
+      isPermanent: false,
+      onConfirm: () => {
+        commitWorkspace((prev) => {
+          const next = moveAttachmentToTrash(prev, taskId, 'attachment', attachmentId);
+          showToast(t.notifMovedToTrashLabel, att.name, { type: 'trash' });
+          return appendNotification(next, {
+            category: 'trash',
+            section: 'attachment',
+            title: `${t.notifMovedToTrashLabel}: ${t.attachmentTypeLabel}`,
+            message: att.name,
+            targetNode: { type: 'trash' },
+          });
+        });
+      },
+    });
   };
 
   const handleAnnotatePhoto = (
@@ -519,14 +1042,117 @@ export default function App() {
     annotatedDataUrl: string,
     caption?: string
   ) => {
-    commitWorkspace((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((tsk) =>
+    commitWorkspace((prev) => {
+      const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId
           ? annotatePhotoInTask(tsk, target, annotatedDataUrl, caption)
           : tsk
-      ),
-    }));
+      );
+      showToast(
+        `${t.notifUpdatedLabel}: ${t.annotatedBadge}`,
+        caption || t.annotatedBadge,
+        { type: 'task', id: taskId }
+      );
+      return appendNotification(
+        { ...prev, tasks: nextTasks },
+        {
+          category: 'update',
+          section: 'attachment',
+          title: `${t.notifUpdatedLabel}: ${t.annotatedBadge}`,
+          message: caption || t.annotatedBadge,
+          targetNode: { type: 'task', id: taskId },
+        }
+      );
+    });
+  };
+
+  // ============================================================================
+  // TRASH RESTORE, PERMANENT DELETE & EMPTY TRASH HANDLERS
+  // ============================================================================
+  const handleRestoreTrashItem = (trashId: string) => {
+    const item = trashItems.find((tr) => tr.id === trashId);
+    if (!item) return;
+    commitWorkspace((prev) => {
+      const restored = restoreTrashItem(prev, trashId);
+      showToast(t.notifRestoredLabel, item.title);
+      return appendNotification(restored, {
+        category: 'trash',
+        section: 'trash',
+        title: t.notifRestoredLabel,
+        message: item.title,
+      });
+    });
+  };
+
+  const handleDeleteTrashItemPermanently = (trashItem: TrashItem) => {
+    setConfirmDeleteState({
+      isOpen: true,
+      itemName: trashItem.title,
+      itemTypeBadge: trashItem.itemType,
+      isPermanent: true,
+      onConfirm: () => {
+        commitWorkspace((prev) => deleteTrashItemPermanently(prev, trashItem.id));
+      },
+    });
+  };
+
+  const handleEmptyTrash = () => {
+    setConfirmDeleteState({
+      isOpen: true,
+      title: t.confirmEmptyTrashTitle,
+      description: t.confirmEmptyTrashDesc,
+      itemName: `${trashItems.length} ${t.trashNav}`,
+      isPermanent: true,
+      confirmButtonLabel: t.emptyTrashButton,
+      onConfirm: () => {
+        commitWorkspace((prev) => emptyTrash(prev));
+      },
+    });
+  };
+
+  const handleResetDefaultWorkspaceWithConfirm = () => {
+    setConfirmDeleteState({
+      isOpen: true,
+      title: t.confirmResetDemoTitle,
+      description: t.confirmResetDemoDesc,
+      itemName: t.resetDefaultDataButton,
+      isPermanent: true,
+      confirmButtonLabel: t.resetDefaultDataButton,
+      onConfirm: () => {
+        commitWorkspace(() => getDefaultWorkspaceState());
+      },
+    });
+  };
+
+  // ============================================================================
+  // NOTIFICATION CENTER HANDLERS
+  // ============================================================================
+  const handleSelectNotification = (notif: AppNotification) => {
+    commitWorkspace((prev) => markNotificationRead(prev, notif.id));
+    if (notif.targetNode) {
+      setSelectedNode(notif.targetNode);
+    }
+  };
+
+  const handleMarkAllNotificationsRead = () => {
+    commitWorkspace((prev) => markAllNotificationsRead(prev));
+  };
+
+  const handleClearAllNotifications = () => {
+    commitWorkspace((prev) => clearAllNotifications(prev));
+  };
+
+  const handleScanRemindersNow = () => {
+    commitWorkspace((prev) =>
+      generateDueTaskReminders(prev, new Date(), {
+        overdueTitle: t.overdueReminderTitle,
+        dueTodayTitle: t.dueTodayReminderTitle,
+        dueTomorrowTitle: t.dueTomorrowReminderTitle,
+      })
+    );
+    showToast(t.checkRemindersNowButton, t.notificationsTitle, {
+      type: 'notifications',
+    });
   };
 
   // Resolve active item for main canvas
@@ -571,7 +1197,7 @@ export default function App() {
       dir={isRtl ? 'rtl' : 'ltr'}
       className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
     >
-      {/* CLEAN MODERN TOP HEADER WITH GLOBAL SEARCH & SETTINGS ICON */}
+      {/* CLEAN MODERN TOP HEADER WITH GLOBAL SEARCH, NOTIFICATIONS, TRASH & SETTINGS */}
       <header className="sticky top-0 z-30 h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-3">
         {/* Left / Start: Mobile menu button + App Brand */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -599,8 +1225,17 @@ export default function App() {
           </div>
 
           <span className="hidden 2xl:inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 ms-1">
-            <Wifi className="w-3.5 h-3.5" />
-            <span>{t.offlineSyncBadge}</span>
+            {localFolderMeta.isConnected ? (
+              <>
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span>{localFolderMeta.folderName}</span>
+              </>
+            ) : (
+              <>
+                <Wifi className="w-3.5 h-3.5" />
+                <span>{t.offlineSyncBadge}</span>
+              </>
+            )}
           </span>
         </div>
 
@@ -697,9 +1332,51 @@ export default function App() {
           )}
         </div>
 
-        {/* Right / End: PWA Install + Settings Button + Theme Toggle + New Task CTA */}
+        {/* Right / End: PWA Install + Notifications + Trash + Settings + Theme + Lock + New Task */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <PWAInstallButton t={t} variant="compact" />
+
+          {/* Notifications Bell Icon Button */}
+          <button
+            type="button"
+            data-testid="header-notifications-btn"
+            onClick={() => setSelectedNode({ type: 'notifications' })}
+            aria-label={t.notificationsNav}
+            title={t.notificationsNav}
+            className={`relative h-9 min-w-[36px] px-2.5 rounded-lg border inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
+              selectedNode.type === 'notifications'
+                ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
+                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Bell className="w-4 h-4" />
+            {unreadNotificationsCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-blue-600 text-white">
+                {unreadNotificationsCount}
+              </span>
+            )}
+          </button>
+
+          {/* Trash Icon Button */}
+          <button
+            type="button"
+            data-testid="header-trash-btn"
+            onClick={() => setSelectedNode({ type: 'trash' })}
+            aria-label={t.trashNav}
+            title={t.trashNav}
+            className={`relative h-9 min-w-[36px] px-2.5 rounded-lg border inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
+              selectedNode.type === 'trash'
+                ? 'border-rose-600 bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
+                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Trash2 className="w-4 h-4" />
+            {trashItems.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-semibold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300">
+                {trashItems.length}
+              </span>
+            )}
+          </button>
 
           {/* Settings Page Icon Button */}
           <button
@@ -727,7 +1404,7 @@ export default function App() {
             className="h-9 min-w-[36px] px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1.5 text-xs font-medium cursor-pointer"
           >
             {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            <span className="hidden xl:inline">
+            <span className="hidden 2xl:inline">
               {isDarkMode ? t.lightTheme : t.darkTheme}
             </span>
           </button>
@@ -742,7 +1419,7 @@ export default function App() {
             className="h-9 min-w-[36px] px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer"
           >
             <Lock className="w-4 h-4" />
-            <span className="hidden xl:inline">{t.lockAppButton}</span>
+            <span className="hidden 2xl:inline">{t.lockAppButton}</span>
           </button>
 
           {/* Primary Action: New Task */}
@@ -774,6 +1451,8 @@ export default function App() {
               tasks={workspace.tasks}
               selectedNode={selectedNode}
               overallProgress={metrics.overallProgressPercent}
+              trashCount={trashItems.length}
+              unreadNotificationsCount={unreadNotificationsCount}
               lang={lang}
               t={t}
               onSelectNode={(node) => setSelectedNode(node)}
@@ -815,6 +1494,8 @@ export default function App() {
                   tasks={workspace.tasks}
                   selectedNode={selectedNode}
                   overallProgress={metrics.overallProgressPercent}
+                  trashCount={trashItems.length}
+                  unreadNotificationsCount={unreadNotificationsCount}
                   lang={lang}
                   t={t}
                   onSelectNode={(node) => {
@@ -838,7 +1519,7 @@ export default function App() {
           </div>
         )}
 
-        {/* FOCUSED MAIN CANVAS: Renders ONLY the item selected from the side list or Settings */}
+        {/* FOCUSED MAIN CANVAS */}
         <main className="flex-1 min-w-0 px-3.5 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 lg:pb-8 overflow-y-auto">
           {selectedNode.type === 'settings' && (
             <SettingsView
@@ -847,16 +1528,38 @@ export default function App() {
               t={t}
               darkMode={isDarkMode}
               syncMeta={syncMeta}
+              localFolderMeta={localFolderMeta}
+              onUpdateLocalFolderMeta={setLocalFolderMeta}
               onSelectLanguage={setLang}
               onToggleDarkMode={() => setIsDarkMode((d) => !d)}
               onSetDarkMode={(dark) => setIsDarkMode(dark)}
               onRestoreWorkspace={(nextState) => {
                 commitWorkspace(() => nextState);
               }}
-              onResetDefaultWorkspace={() => {
-                commitWorkspace(() => getDefaultWorkspaceState());
-              }}
+              onResetDefaultWorkspace={handleResetDefaultWorkspaceWithConfirm}
               onLockApp={handleLockApp}
+            />
+          )}
+
+          {selectedNode.type === 'trash' && (
+            <TrashView
+              trashItems={trashItems}
+              t={t}
+              onRestoreItem={handleRestoreTrashItem}
+              onDeleteItemPermanently={handleDeleteTrashItemPermanently}
+              onEmptyTrash={handleEmptyTrash}
+            />
+          )}
+
+          {selectedNode.type === 'notifications' && (
+            <NotificationCenter
+              notifications={notifications}
+              t={t}
+              onSelectNotification={handleSelectNotification}
+              onMarkAllRead={handleMarkAllNotificationsRead}
+              onClearAll={handleClearAllNotifications}
+              onScanRemindersNow={handleScanRemindersNow}
+              onNavigate={setSelectedNode}
             />
           )}
 
@@ -958,10 +1661,47 @@ export default function App() {
         </main>
       </div>
 
+      {/* LIVE FLOATING NOTIFICATION TOAST BANNER */}
+      {liveToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-20 lg:bottom-5 end-4 z-40 max-w-sm bg-slate-900 dark:bg-slate-800 text-white border border-slate-700 rounded-xl shadow-xl p-3.5 flex items-start gap-3"
+        >
+          <div className="w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0 mt-0.5">
+            <Bell className="w-4 h-4" />
+          </div>
+          <div
+            onClick={() => {
+              if (liveToast.targetNode) {
+                setSelectedNode(liveToast.targetNode);
+              }
+              setLiveToast(null);
+            }}
+            className="min-w-0 flex-1 cursor-pointer"
+          >
+            <div className="text-xs font-bold text-white truncate">
+              {liveToast.title}
+            </div>
+            <div className="text-[11px] text-slate-300 truncate mt-0.5">
+              {liveToast.message}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLiveToast(null)}
+            aria-label={t.cancel}
+            className="p-1 text-slate-400 hover:text-white rounded"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* MOBILE & TABLET FIXED BOTTOM THUMB-ZONE NAVIGATION BAR (< 1024px) */}
       <nav
         aria-label={t.sidebarTitle}
-        className="lg:hidden fixed bottom-0 inset-x-0 z-40 h-16 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 grid grid-cols-4 items-center px-2"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-40 h-16 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 grid grid-cols-5 items-center px-1.5"
       >
         <button
           type="button"
@@ -976,7 +1716,7 @@ export default function App() {
           }`}
         >
           <BarChart3 className="w-5 h-5" />
-          <span className="text-[10px] mt-1 truncate max-w-[72px]">{t.navDashboard}</span>
+          <span className="text-[10px] mt-1 truncate max-w-[64px]">{t.navDashboard}</span>
         </button>
 
         <button
@@ -992,7 +1732,7 @@ export default function App() {
           }`}
         >
           <FolderKanban className="w-5 h-5" />
-          <span className="text-[10px] mt-1 truncate max-w-[72px]">{t.navWorkspace}</span>
+          <span className="text-[10px] mt-1 truncate max-w-[64px]">{t.navWorkspace}</span>
         </button>
 
         <button
@@ -1010,7 +1750,26 @@ export default function App() {
           <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
             <Plus className="w-4 h-4" />
           </div>
-          <span className="text-[10px] mt-0.5 truncate max-w-[72px]">{t.navNewTask}</span>
+          <span className="text-[10px] mt-0.5 truncate max-w-[64px]">{t.navNewTask}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setIsMobileSidebarOpen(false);
+            setSelectedNode({ type: 'notifications' });
+          }}
+          className={`relative flex flex-col items-center justify-center min-h-[48px] rounded-xl transition-colors cursor-pointer ${
+            selectedNode.type === 'notifications' && !isMobileSidebarOpen
+              ? 'text-blue-600 dark:text-blue-400 font-semibold'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Bell className="w-5 h-5" />
+          {unreadNotificationsCount > 0 && (
+            <span className="absolute top-1.5 end-3 w-2 h-2 rounded-full bg-blue-600" />
+          )}
+          <span className="text-[10px] mt-1 truncate max-w-[64px]">{t.notificationsNav}</span>
         </button>
 
         <button
@@ -1026,7 +1785,7 @@ export default function App() {
           }`}
         >
           <Settings className="w-5 h-5" />
-          <span className="text-[10px] mt-1 truncate max-w-[72px]">{t.navSettings}</span>
+          <span className="text-[10px] mt-1 truncate max-w-[64px]">{t.navSettings}</span>
         </button>
       </nav>
 
@@ -1042,7 +1801,13 @@ export default function App() {
         onClose={() => setNewTaskContext({ isOpen: false })}
         onCreateTask={handleCreateTask}
       />
+
+      {/* Global Confirm Delete Modal for all app items */}
+      <ConfirmDeleteModal
+        state={confirmDeleteState}
+        t={t}
+        onCancel={() => setConfirmDeleteState(null)}
+      />
     </div>
   );
 }
-

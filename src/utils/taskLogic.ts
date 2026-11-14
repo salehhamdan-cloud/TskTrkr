@@ -1,6 +1,9 @@
 import {
+  AppNotification,
   FolderItem,
   LanguageCode,
+  NotificationCategory,
+  NotificationSection,
   PhotoTargetRef,
   ProjectGroupItem,
   ProjectMetrics,
@@ -12,6 +15,7 @@ import {
   TaskStatus,
   TaskUpdateLog,
   TodoItem,
+  TrashItem,
   WorkspaceState,
 } from '../types/task';
 import { resolveLocalizedText } from '../i18n/translations';
@@ -262,6 +266,7 @@ export function removeFolder(state: WorkspaceState, folderId: string): Workspace
     state.projects.filter((p) => p.folderId === folderId).map((p) => p.id)
   );
   return {
+    ...state,
     folders: state.folders.filter((f) => f.id !== folderId),
     projects: state.projects.filter((p) => p.folderId !== folderId),
     tasks: state.tasks.filter(
@@ -1054,3 +1059,599 @@ export function formatDateTimeStamp(isoOrLocal: string): string {
   const min = String(date.getMinutes()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd} · ${hh}:${min}`;
 }
+
+/**
+ * ============================================================================
+ * TRASH / RECYCLE BIN PURE LOGIC HELPERS
+ * ============================================================================
+ */
+
+export function moveFolderToTrash(
+  state: WorkspaceState,
+  folderId: string,
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  const folder = state.folders.find((f) => f.id === folderId);
+  if (!folder) return state;
+
+  const childProjects = state.projects.filter((p) => p.folderId === folderId);
+  const childProjectIds = new Set(childProjects.map((p) => p.id));
+  const childTasks = state.tasks.filter(
+    (t) => t.folderId === folderId || (t.projectId && childProjectIds.has(t.projectId))
+  );
+
+  const trashItem: TrashItem = {
+    id: `trash-fld-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    itemType: 'folder',
+    title: folder.name,
+    subtitle: `${childProjects.length} projects · ${childTasks.length} tasks`,
+    deletedAt: nowIso,
+    folder,
+    childProjects,
+    childTasks,
+  };
+
+  const nextState = removeFolder(state, folderId);
+  return {
+    ...nextState,
+    trash: [trashItem, ...(state.trash || [])],
+  };
+}
+
+export function moveProjectToTrash(
+  state: WorkspaceState,
+  projectId: string,
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  const project = state.projects.find((p) => p.id === projectId);
+  if (!project) return state;
+
+  const childTasks = state.tasks.filter((t) => t.projectId === projectId);
+  const trashItem: TrashItem = {
+    id: `trash-prj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    itemType: 'project',
+    title: project.name,
+    subtitle: `${childTasks.length} tasks`,
+    deletedAt: nowIso,
+    project,
+    childTasks,
+  };
+
+  const nextState = removeProject(state, projectId);
+  return {
+    ...nextState,
+    trash: [trashItem, ...(state.trash || [])],
+  };
+}
+
+export function moveTaskToTrash(
+  state: WorkspaceState,
+  taskId: string,
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (!task) return state;
+
+  const trashItem: TrashItem = {
+    id: `trash-tsk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    itemType: 'task',
+    title: task.title,
+    subtitle: task.project,
+    deletedAt: nowIso,
+    task,
+  };
+
+  return {
+    ...state,
+    tasks: state.tasks.filter((t) => t.id !== taskId),
+    trash: [trashItem, ...(state.trash || [])],
+  };
+}
+
+export function moveTodoToTrash(
+  state: WorkspaceState,
+  taskId: string,
+  todoId: string,
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (!task) return state;
+  const todo = task.todos.find((td) => td.id === todoId);
+  if (!todo) return state;
+
+  const trashItem: TrashItem = {
+    id: `trash-todo-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    itemType: 'todo',
+    title: todo.title,
+    subtitle: task.title,
+    deletedAt: nowIso,
+    todo,
+    parentTaskId: taskId,
+  };
+
+  return {
+    ...state,
+    tasks: state.tasks.map((t) =>
+      t.id === taskId ? removeTodoFromTask(t, todoId, nowIso) : t
+    ),
+    trash: [trashItem, ...(state.trash || [])],
+  };
+}
+
+export function moveSubTodoToTrash(
+  state: WorkspaceState,
+  taskId: string,
+  todoId: string,
+  subTodoId: string,
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (!task) return state;
+  const todo = task.todos.find((td) => td.id === todoId);
+  const subTodo = todo?.subTodos?.find((s) => s.id === subTodoId);
+  if (!todo || !subTodo) return state;
+
+  const trashItem: TrashItem = {
+    id: `trash-sub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    itemType: 'subtodo',
+    title: subTodo.title,
+    subtitle: `${task.title} › ${todo.title}`,
+    deletedAt: nowIso,
+    subTodo,
+    parentTaskId: taskId,
+    parentTodoId: todoId,
+  };
+
+  return {
+    ...state,
+    tasks: state.tasks.map((t) =>
+      t.id === taskId ? removeSubTodoFromTask(t, todoId, subTodoId, nowIso) : t
+    ),
+    trash: [trashItem, ...(state.trash || [])],
+  };
+}
+
+export function moveUpdateToTrash(
+  state: WorkspaceState,
+  taskId: string,
+  updateId: string,
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (!task) return state;
+  const update = task.updates.find((u) => u.id === updateId);
+  if (!update) return state;
+
+  const trashItem: TrashItem = {
+    id: `trash-upd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    itemType: 'update',
+    title: update.content,
+    subtitle: `${task.title} · ${update.timestamp}`,
+    deletedAt: nowIso,
+    update,
+    parentTaskId: taskId,
+  };
+
+  return {
+    ...state,
+    tasks: state.tasks.map((t) =>
+      t.id === taskId
+        ? {
+            ...t,
+            updates: t.updates.filter((u) => u.id !== updateId),
+            updatedAt: nowIso,
+          }
+        : t
+    ),
+    trash: [trashItem, ...(state.trash || [])],
+  };
+}
+
+export function moveAttachmentToTrash(
+  state: WorkspaceState,
+  taskId: string,
+  section: 'attachment' | 'todo' | 'update',
+  attachmentId: string,
+  parentId?: string,
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (!task) return state;
+
+  let foundAttachment: TaskAttachment | undefined;
+  if (section === 'attachment') {
+    foundAttachment = task.attachments.find((a) => a.id === attachmentId);
+  } else if (section === 'todo' && parentId) {
+    const todo = task.todos.find((td) => td.id === parentId);
+    foundAttachment = todo?.photos?.find((p) => p.id === attachmentId);
+  } else if (section === 'update' && parentId) {
+    const upd = task.updates.find((u) => u.id === parentId);
+    foundAttachment = upd?.photos?.find((p) => p.id === attachmentId);
+  }
+
+  if (!foundAttachment) return state;
+
+  const trashItem: TrashItem = {
+    id: `trash-att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    itemType: 'attachment',
+    title: foundAttachment.name,
+    subtitle: task.title,
+    deletedAt: nowIso,
+    attachment: foundAttachment,
+    parentTaskId: taskId,
+    parentTodoId: section === 'todo' ? parentId : undefined,
+    parentUpdateId: section === 'update' ? parentId : undefined,
+    attachmentSection: section,
+  };
+
+  return {
+    ...state,
+    tasks: state.tasks.map((t) => {
+      if (t.id !== taskId) return t;
+      if (section === 'todo' && parentId) {
+        return removePhotoFromTodoInTask(t, parentId, attachmentId, nowIso);
+      }
+      if (section === 'update' && parentId) {
+        return removePhotoFromUpdateInTask(t, parentId, attachmentId, nowIso);
+      }
+      return {
+        ...t,
+        attachments: t.attachments.filter((a) => a.id !== attachmentId),
+        updatedAt: nowIso,
+      };
+    }),
+    trash: [trashItem, ...(state.trash || [])],
+  };
+}
+
+export function restoreTrashItem(
+  state: WorkspaceState,
+  trashId: string,
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  const trashList = state.trash || [];
+  const item = trashList.find((tr) => tr.id === trashId);
+  if (!item) return state;
+
+  const remainingTrash = trashList.filter((tr) => tr.id !== trashId);
+
+  if (item.itemType === 'folder' && item.folder) {
+    const existingFolderIds = new Set(state.folders.map((f) => f.id));
+    const existingProjectIds = new Set(state.projects.map((p) => p.id));
+    const existingTaskIds = new Set(state.tasks.map((t) => t.id));
+
+    return {
+      ...state,
+      folders: existingFolderIds.has(item.folder.id)
+        ? state.folders
+        : [...state.folders, item.folder],
+      projects: [
+        ...state.projects,
+        ...(item.childProjects || []).filter((p) => !existingProjectIds.has(p.id)),
+      ],
+      tasks: [
+        ...state.tasks,
+        ...(item.childTasks || []).filter((t) => !existingTaskIds.has(t.id)),
+      ],
+      trash: remainingTrash,
+    };
+  }
+
+  if (item.itemType === 'project' && item.project) {
+    const existingProjectIds = new Set(state.projects.map((p) => p.id));
+    const existingTaskIds = new Set(state.tasks.map((t) => t.id));
+    // Ensure parent folder exists, or attach to first folder
+    const folderExists = state.folders.some((f) => f.id === item.project!.folderId);
+    const restoredProject: ProjectGroupItem = folderExists
+      ? item.project
+      : {
+          ...item.project,
+          folderId: state.folders[0]?.id || item.project.folderId,
+        };
+
+    return {
+      ...state,
+      projects: existingProjectIds.has(restoredProject.id)
+        ? state.projects
+        : [...state.projects, restoredProject],
+      tasks: [
+        ...state.tasks,
+        ...(item.childTasks || []).filter((t) => !existingTaskIds.has(t.id)),
+      ],
+      trash: remainingTrash,
+    };
+  }
+
+  if (item.itemType === 'task' && item.task) {
+    const existingTaskIds = new Set(state.tasks.map((t) => t.id));
+    return {
+      ...state,
+      tasks: existingTaskIds.has(item.task.id)
+        ? state.tasks
+        : [{ ...item.task, updatedAt: nowIso }, ...state.tasks],
+      trash: remainingTrash,
+    };
+  }
+
+  if (item.itemType === 'todo' && item.todo && item.parentTaskId) {
+    return {
+      ...state,
+      tasks: state.tasks.map((t) => {
+        if (t.id !== item.parentTaskId) return t;
+        const nextTodos = [...t.todos, item.todo!];
+        const nextProg = calculateTaskProgress({
+          todos: nextTodos,
+          manualProgress: t.manualProgress,
+          status: t.status,
+        });
+        return {
+          ...t,
+          todos: nextTodos,
+          status: deriveTaskStatus(t.status, nextProg),
+          updatedAt: nowIso,
+        };
+      }),
+      trash: remainingTrash,
+    };
+  }
+
+  if (item.itemType === 'subtodo' && item.subTodo && item.parentTaskId && item.parentTodoId) {
+    return {
+      ...state,
+      tasks: state.tasks.map((t) => {
+        if (t.id !== item.parentTaskId) return t;
+        const nextTodos = t.todos.map((td) => {
+          if (td.id !== item.parentTodoId) return td;
+          const nextSubs = [...(td.subTodos || []), item.subTodo!];
+          const allDone = nextSubs.every((s) => s.completed);
+          return { ...td, completed: allDone, subTodos: nextSubs };
+        });
+        const nextProg = calculateTaskProgress({
+          todos: nextTodos,
+          manualProgress: t.manualProgress,
+          status: t.status,
+        });
+        return {
+          ...t,
+          todos: nextTodos,
+          status: deriveTaskStatus(t.status, nextProg),
+          updatedAt: nowIso,
+        };
+      }),
+      trash: remainingTrash,
+    };
+  }
+
+  if (item.itemType === 'update' && item.update && item.parentTaskId) {
+    return {
+      ...state,
+      tasks: state.tasks.map((t) => {
+        if (t.id !== item.parentTaskId) return t;
+        const nextUpdates = [item.update!, ...t.updates].sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        return { ...t, updates: nextUpdates, updatedAt: nowIso };
+      }),
+      trash: remainingTrash,
+    };
+  }
+
+  if (item.itemType === 'attachment' && item.attachment && item.parentTaskId) {
+    return {
+      ...state,
+      tasks: state.tasks.map((t) => {
+        if (t.id !== item.parentTaskId) return t;
+        if (item.attachmentSection === 'todo' && item.parentTodoId) {
+          return {
+            ...t,
+            todos: t.todos.map((td) =>
+              td.id === item.parentTodoId
+                ? { ...td, photos: [...(td.photos || []), item.attachment!] }
+                : td
+            ),
+            updatedAt: nowIso,
+          };
+        }
+        if (item.attachmentSection === 'update' && item.parentUpdateId) {
+          return {
+            ...t,
+            updates: t.updates.map((u) =>
+              u.id === item.parentUpdateId
+                ? { ...u, photos: [...(u.photos || []), item.attachment!] }
+                : u
+            ),
+            updatedAt: nowIso,
+          };
+        }
+        return {
+          ...t,
+          attachments: [item.attachment!, ...t.attachments],
+          updatedAt: nowIso,
+        };
+      }),
+      trash: remainingTrash,
+    };
+  }
+
+  return {
+    ...state,
+    trash: remainingTrash,
+  };
+}
+
+export function deleteTrashItemPermanently(
+  state: WorkspaceState,
+  trashId: string
+): WorkspaceState {
+  return {
+    ...state,
+    trash: (state.trash || []).filter((tr) => tr.id !== trashId),
+  };
+}
+
+export function emptyTrash(state: WorkspaceState): WorkspaceState {
+  return {
+    ...state,
+    trash: [],
+  };
+}
+
+/**
+ * ============================================================================
+ * NOTIFICATION & DUE-DATE / TIME REMINDER PURE LOGIC HELPERS
+ * ============================================================================
+ */
+
+export function appendNotification(
+  state: WorkspaceState,
+  input: {
+    category: NotificationCategory;
+    section: NotificationSection;
+    title: string;
+    message: string;
+    targetNode?: SelectedSidebarNode;
+    dedupeKey?: string;
+  },
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  const existing = state.notifications || [];
+  if (input.dedupeKey && existing.some((n) => n.dedupeKey === input.dedupeKey)) {
+    return state;
+  }
+
+  const newNotif: AppNotification = {
+    id: `ntf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    category: input.category,
+    section: input.section,
+    title: input.title,
+    message: input.message,
+    timestamp: nowIso,
+    read: false,
+    targetNode: input.targetNode,
+    dedupeKey: input.dedupeKey,
+  };
+
+  return {
+    ...state,
+    notifications: [newNotif, ...existing].slice(0, 150),
+  };
+}
+
+export function markNotificationRead(
+  state: WorkspaceState,
+  notificationId: string
+): WorkspaceState {
+  return {
+    ...state,
+    notifications: (state.notifications || []).map((n) =>
+      n.id === notificationId ? { ...n, read: true } : n
+    ),
+  };
+}
+
+export function markAllNotificationsRead(state: WorkspaceState): WorkspaceState {
+  return {
+    ...state,
+    notifications: (state.notifications || []).map((n) => ({ ...n, read: true })),
+  };
+}
+
+export function clearAllNotifications(state: WorkspaceState): WorkspaceState {
+  return {
+    ...state,
+    notifications: [],
+  };
+}
+
+/**
+ * Scans all active tasks for due dates and due times and generates deduplicated
+ * reminder notifications for overdue tasks, tasks due today, or tasks due tomorrow.
+ */
+export function generateDueTaskReminders(
+  state: WorkspaceState,
+  nowDate = new Date(),
+  labels?: {
+    overdueTitle: string;
+    dueTodayTitle: string;
+    dueTomorrowTitle: string;
+  }
+): WorkspaceState {
+  const yyyy = nowDate.getFullYear();
+  const mm = String(nowDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(nowDate.getDate()).padStart(2, '0');
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+
+  const tomorrow = new Date(nowDate.getTime() + 24 * 60 * 60 * 1000);
+  const tomY = tomorrow.getFullYear();
+  const tomM = String(tomorrow.getMonth() + 1).padStart(2, '0');
+  const tomD = String(tomorrow.getDate()).padStart(2, '0');
+  const tomorrowStr = `${tomY}-${tomM}-${tomD}`;
+
+  const nowHH = String(nowDate.getHours()).padStart(2, '0');
+  const nowMin = String(nowDate.getMinutes()).padStart(2, '0');
+  const currentHHMM = `${nowHH}:${nowMin}`;
+  const nowIso = nowDate.toISOString();
+
+  let nextState = state;
+
+  for (const task of state.tasks) {
+    const prog = calculateTaskProgress(task);
+    if (prog === 100 || task.status === 'completed' || !task.dueDate) {
+      continue;
+    }
+
+    const timeSuffix = task.dueTime ? ` (${task.dueTime})` : '';
+
+    // 1. Overdue by date, or due today with a dueTime that has passed
+    const isOverdueByDate = task.dueDate < todayStr;
+    const isOverdueByTime =
+      task.dueDate === todayStr && Boolean(task.dueTime && task.dueTime <= currentHHMM);
+
+    if (isOverdueByDate || isOverdueByTime) {
+      const dedupeKey = `reminder-overdue-${task.id}-${task.dueDate}-${task.dueTime || ''}`;
+      nextState = appendNotification(
+        nextState,
+        {
+          category: 'reminder',
+          section: 'task',
+          title: labels?.overdueTitle || 'Overdue Task Reminder',
+          message: `${task.title} — ${task.dueDate}${timeSuffix}`,
+          targetNode: { type: 'task', id: task.id },
+          dedupeKey,
+        },
+        nowIso
+      );
+    } else if (task.dueDate === todayStr) {
+      const dedupeKey = `reminder-today-${task.id}-${task.dueDate}-${task.dueTime || ''}`;
+      nextState = appendNotification(
+        nextState,
+        {
+          category: 'reminder',
+          section: 'task',
+          title: labels?.dueTodayTitle || 'Task Due Today',
+          message: `${task.title} — ${task.dueDate}${timeSuffix}`,
+          targetNode: { type: 'task', id: task.id },
+          dedupeKey,
+        },
+        nowIso
+      );
+    } else if (task.dueDate === tomorrowStr) {
+      const dedupeKey = `reminder-tomorrow-${task.id}-${task.dueDate}`;
+      nextState = appendNotification(
+        nextState,
+        {
+          category: 'reminder',
+          section: 'task',
+          title: labels?.dueTomorrowTitle || 'Task Due Tomorrow',
+          message: `${task.title} — ${task.dueDate}${timeSuffix}`,
+          targetNode: { type: 'task', id: task.id },
+          dedupeKey,
+        },
+        nowIso
+      );
+    }
+  }
+
+  return nextState;
+}
+

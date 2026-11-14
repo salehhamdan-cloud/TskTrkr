@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   BarChart3,
+  Bell,
   Check,
   CheckSquare,
   ChevronDown,
@@ -32,6 +33,8 @@ interface SidebarTreeProps {
   tasks: TaskItem[];
   selectedNode: SelectedSidebarNode;
   overallProgress: number;
+  trashCount?: number;
+  unreadNotificationsCount?: number;
   lang: LanguageCode;
   t: TranslationDictionary;
   onSelectNode: (node: SelectedSidebarNode) => void;
@@ -51,6 +54,8 @@ export const SidebarTree: React.FC<SidebarTreeProps> = ({
   tasks,
   selectedNode,
   overallProgress,
+  trashCount = 0,
+  unreadNotificationsCount = 0,
   lang,
   t,
   onSelectNode,
@@ -139,12 +144,12 @@ export const SidebarTree: React.FC<SidebarTreeProps> = ({
       aria-label={t.sidebarTitle}
       className="w-full h-full flex flex-col bg-white dark:bg-slate-900 border-e border-slate-200 dark:border-slate-800 select-none"
     >
-      {/* Top Dashboard Item */}
-      <div className="p-3 border-b border-slate-100 dark:border-slate-800">
+      {/* Top Dashboard, Notifications & Trash Navigation Items */}
+      <div className="p-3 border-b border-slate-100 dark:border-slate-800 space-y-1">
         <button
           type="button"
           onClick={() => onSelectNode({ type: 'dashboard' })}
-          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
             selectedNode.type === 'dashboard'
               ? 'bg-blue-600 text-white'
               : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -162,6 +167,58 @@ export const SidebarTree: React.FC<SidebarTreeProps> = ({
             }`}
           >
             {overallProgress}%
+          </span>
+        </button>
+
+        <button
+          type="button"
+          data-testid="sidebar-notifications-btn"
+          onClick={() => onSelectNode({ type: 'notifications' })}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+            selectedNode.type === 'notifications'
+              ? 'bg-blue-600 text-white'
+              : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <span className="inline-flex items-center gap-2.5 truncate">
+            <Bell className="w-4 h-4 shrink-0" />
+            <span className="truncate">{t.notificationsNav}</span>
+          </span>
+          {unreadNotificationsCount > 0 && (
+            <span
+              className={`px-1.5 py-0.5 rounded-md font-mono tabular-nums text-[10px] font-bold ${
+                selectedNode.type === 'notifications'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-blue-600 text-white'
+              }`}
+            >
+              {unreadNotificationsCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          data-testid="sidebar-trash-btn"
+          onClick={() => onSelectNode({ type: 'trash' })}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+            selectedNode.type === 'trash'
+              ? 'bg-rose-600 text-white'
+              : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <span className="inline-flex items-center gap-2.5 truncate">
+            <Trash2 className="w-4 h-4 shrink-0" />
+            <span className="truncate">{t.trashNav}</span>
+          </span>
+          <span
+            className={`px-1.5 py-0.5 rounded-md font-mono tabular-nums text-[10px] font-semibold ${
+              selectedNode.type === 'trash'
+                ? 'bg-white/20 text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            {trashCount}
           </span>
         </button>
       </div>

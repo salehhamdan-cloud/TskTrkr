@@ -19,6 +19,8 @@ export function getDefaultWorkspaceState(): WorkspaceState {
     folders: SEED_FOLDERS,
     projects: SEED_PROJECTS,
     tasks: SEED_TASKS,
+    trash: [],
+    notifications: [],
   };
 }
 
@@ -42,6 +44,8 @@ export function loadWorkspaceFromLocalStorage(): WorkspaceState {
         folders: parsed.folders,
         projects: parsed.projects,
         tasks: parsed.tasks,
+        trash: Array.isArray(parsed.trash) ? parsed.trash : [],
+        notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
       };
     }
     return getDefaultWorkspaceState();

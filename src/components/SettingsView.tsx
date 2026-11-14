@@ -14,16 +14,27 @@ import {
   Lock,
   KeyRound,
   GitBranch,
+  FolderOpen,
+  Save,
+  Unlink,
 } from 'lucide-react';
 import { LanguageCode, WorkspaceState } from '../types/task';
 import { TranslationDictionary } from '../i18n/translations';
-import { formatFileSize } from '../utils/taskLogic';
+import { formatDateTimeStamp, formatFileSize } from '../utils/taskLogic';
 import {
   loadAppPassword,
   OfflineSyncMeta,
   saveAppPassword,
   verifyAppPassword,
 } from '../utils/offlineStorage';
+import {
+  AUTOSAVE_FILENAME,
+  chooseAndConnectLocalFolder,
+  disconnectLocalFolder,
+  LocalFolderSyncMeta,
+  overwriteLocalSaveFile,
+  readFromConnectedLocalFolder,
+} from '../utils/localFolderSync';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface SettingsViewProps {
@@ -32,6 +43,8 @@ interface SettingsViewProps {
   t: TranslationDictionary;
   darkMode: boolean;
   syncMeta: OfflineSyncMeta;
+  localFolderMeta?: LocalFolderSyncMeta;
+  onUpdateLocalFolderMeta?: (meta: LocalFolderSyncMeta) => void;
   onSelectLanguage: (lang: LanguageCode) => void;
   onToggleDarkMode: () => void;
   onSetDarkMode?: (dark: boolean) => void;
@@ -46,6 +59,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   t,
   darkMode,
   syncMeta,
+  localFolderMeta,
+  onUpdateLocalFolderMeta,
   onSelectLanguage,
   onToggleDarkMode,
   onSetDarkMode,
@@ -167,9 +182,58 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     e.target.value = '';
   };
 
+  const [customFolderNameInput, setCustomFolderNameInput] = useState(
+    localFolderMeta?.folderName || 'Documents/TaskTracker'
+  );
+  const [folderSyncFeedback, setFolderSyncFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const handleChooseLocalFolder = async () => {
+    const res = await chooseAndConnectLocalFolder(
+      workspace,
+      lang,
+      darkMode,
+      customFolderNameInput
+    );
+    if (res.success) {
+      onUpdateLocalFolderMeta?.(res.meta);
+      setCustomFolderNameInput(res.meta.folderName);
+      setFolderSyncFeedback({
+        type: 'success',
+        message: t.localFolderConnectedSuccess,
+      });
+    }
+  };
+
+  const handleOverwriteNow = async () => {
+    const nextMeta = await overwriteLocalSaveFile(workspace, lang, darkMode, true);
+    onUpdateLocalFolderMeta?.(nextMeta);
+    setFolderSyncFeedback({
+      type: 'success',
+      message: t.localFolderOverwrittenSuccess,
+    });
+  };
+
+  const handleLoadFromConnectedFolder = async () => {
+    const payload = await readFromConnectedLocalFolder();
+    if (!payload || !payload.workspace) {
+      setFolderSyncFeedback({ type: 'error', message: t.backupRestoreError });
+      return;
+    }
+    onRestoreWorkspace(payload.workspace);
+    setFolderSyncFeedback({ type: 'success', message: t.backupRestoredSuccess });
+  };
+
+  const handleDisconnectLocalFolder = async () => {
+    const nextMeta = await disconnectLocalFolder();
+    onUpdateLocalFolderMeta?.(nextMeta);
+    setFolderSyncFeedback(null);
+  };
+
   const handleResetDemo = () => {
     onResetDefaultWorkspace();
-    setFeedback({ type: 'success', message: t.backupRestoredSuccess });
   };
 
   const languages: { code: LanguageCode; label: string; nativeName: string }[] = [
@@ -405,6 +469,142 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             {t.resetDefaultDataButton}
           </button>
         </div>
+      </section>
+
+      {/* Section 3B: Local Folder Auto-Save (Single-File Overwrite) */}
+      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+              <FolderOpen className="w-4.5 h-4.5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                {t.localFolderSyncTitle}
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                {t.localFolderSyncDesc}
+              </p>
+            </div>
+          </div>
+
+          {localFolderMeta?.isConnected && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              {t.autoOverwriteActiveBadge}
+            </span>
+          )}
+        </div>
+
+        {/* Folder Name Input + Choose Folder CTA */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          <input
+            type="text"
+            data-testid="local-folder-name-input"
+            value={customFolderNameInput}
+            onChange={(e) => setCustomFolderNameInput(e.target.value)}
+            placeholder={t.folderNameInputPlaceholder}
+            className="flex-1 h-9 px-3 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+          />
+          <button
+            type="button"
+            data-testid="choose-save-folder-btn"
+            onClick={handleChooseLocalFolder}
+            className="h-9 px-4 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            <span>
+              {localFolderMeta?.isConnected
+                ? t.changeSaveFolderButton
+                : t.chooseSaveFolderButton}
+            </span>
+          </button>
+        </div>
+
+        {/* Connected Folder Telemetry Grid */}
+        {localFolderMeta?.isConnected && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800">
+            <div>
+              <span className="block text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                {t.connectedFolderLabel}
+              </span>
+              <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate block mt-0.5">
+                {localFolderMeta.folderName}
+              </span>
+            </div>
+            <div>
+              <span className="block text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                {t.overwrittenFileLabel}
+              </span>
+              <span className="text-xs font-mono font-semibold text-blue-600 dark:text-blue-400 truncate block mt-0.5">
+                {localFolderMeta.fileName || AUTOSAVE_FILENAME}
+              </span>
+            </div>
+            <div>
+              <span className="block text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                {t.overwriteCountLabel}
+              </span>
+              <span className="text-xs font-mono font-semibold text-slate-900 dark:text-slate-100 block mt-0.5">
+                {localFolderMeta.overwriteCount} ({formatFileSize(localFolderMeta.lastSavedBytes)})
+              </span>
+            </div>
+            <div>
+              <span className="block text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                {t.lastOverwrittenLabel}
+              </span>
+              <span className="text-xs font-mono text-slate-700 dark:text-slate-300 block mt-0.5">
+                {localFolderMeta.lastOverwrittenAt
+                  ? formatDateTimeStamp(localFolderMeta.lastOverwrittenAt)
+                  : '—'}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {folderSyncFeedback && (
+          <div
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-medium border ${
+              folderSyncFeedback.type === 'success'
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300'
+                : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/60 text-rose-700 dark:text-rose-300'
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{folderSyncFeedback.message}</span>
+          </div>
+        )}
+
+        {localFolderMeta?.isConnected && (
+          <div className="flex flex-wrap items-center gap-2.5 pt-1">
+            <button
+              type="button"
+              data-testid="overwrite-save-now-btn"
+              onClick={handleOverwriteNow}
+              className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{t.overwriteSaveNowButton}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleLoadFromConnectedFolder}
+              className="h-9 px-3.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Upload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>{t.loadFromFolderButton}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDisconnectLocalFolder}
+              className="h-9 px-3.5 rounded-lg text-xs font-semibold border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Unlink className="w-3.5 h-3.5" />
+              <span>{t.disconnectFolderButton}</span>
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Section 4: Install App (Mobile, Tablet & PC) */}

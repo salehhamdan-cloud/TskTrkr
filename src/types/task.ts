@@ -87,6 +87,7 @@ export interface TaskItem {
   priority: TaskPriority;
   status: TaskStatus;
   dueDate: string; // YYYY-MM-DD
+  dueTime?: string; // HH:mm optional reminder time
   manualProgress: number; // Used when todos is empty (0-100)
   todos: TodoItem[];
   updates: TaskUpdateLog[];
@@ -98,14 +99,78 @@ export interface TaskItem {
 export type SelectedSidebarNode =
   | { type: 'dashboard' }
   | { type: 'settings' }
+  | { type: 'trash' }
+  | { type: 'notifications' }
   | { type: 'folder'; id: string }
   | { type: 'project'; id: string }
   | { type: 'task'; id: string };
+
+export type TrashItemType =
+  | 'folder'
+  | 'project'
+  | 'task'
+  | 'todo'
+  | 'subtodo'
+  | 'update'
+  | 'attachment';
+
+export interface TrashItem {
+  id: string;
+  itemType: TrashItemType;
+  title: string;
+  subtitle?: string;
+  deletedAt: string;
+  folder?: FolderItem;
+  childProjects?: ProjectGroupItem[];
+  childTasks?: TaskItem[];
+  project?: ProjectGroupItem;
+  task?: TaskItem;
+  todo?: TodoItem;
+  subTodo?: SubTodoItem;
+  update?: TaskUpdateLog;
+  attachment?: TaskAttachment;
+  parentTaskId?: string;
+  parentTodoId?: string;
+  parentUpdateId?: string;
+  attachmentSection?: 'attachment' | 'todo' | 'update';
+}
+
+export type NotificationCategory =
+  | 'reminder'
+  | 'update'
+  | 'change'
+  | 'trash'
+  | 'sync';
+
+export type NotificationSection =
+  | 'folder'
+  | 'project'
+  | 'task'
+  | 'todo'
+  | 'subtodo'
+  | 'update'
+  | 'attachment'
+  | 'trash'
+  | 'system';
+
+export interface AppNotification {
+  id: string;
+  category: NotificationCategory;
+  section: NotificationSection;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  targetNode?: SelectedSidebarNode;
+  dedupeKey?: string;
+}
 
 export interface WorkspaceState {
   folders: FolderItem[];
   projects: ProjectGroupItem[];
   tasks: TaskItem[];
+  trash?: TrashItem[];
+  notifications?: AppNotification[];
 }
 
 export interface ProjectMetrics {

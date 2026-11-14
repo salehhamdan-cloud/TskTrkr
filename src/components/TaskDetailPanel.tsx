@@ -113,7 +113,13 @@ interface TaskDetailPanelProps {
     patch: Partial<
       Pick<
         TaskItem,
-        'status' | 'priority' | 'manualProgress' | 'dueDate' | 'title' | 'description'
+        | 'status'
+        | 'priority'
+        | 'manualProgress'
+        | 'dueDate'
+        | 'dueTime'
+        | 'title'
+        | 'description'
       >
     >
   ) => void;
@@ -647,6 +653,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                   <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
                   <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">
                     {t.dueDateLabel}: {task.dueDate}
+                    {task.dueTime ? ` · ${task.dueTime}` : ''}
                   </span>
                 </div>
                 <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 leading-snug">
@@ -792,20 +799,37 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label
-                  htmlFor="detail-task-duedate"
-                  className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1"
-                >
-                  {t.dueDateLabel}
-                </label>
-                <input
-                  id="detail-task-duedate"
-                  type="date"
-                  value={task.dueDate}
-                  onChange={(e) => onUpdateTaskMeta(task.id, { dueDate: e.target.value })}
-                  className="w-full h-9 px-2.5 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label
+                    htmlFor="detail-task-duedate"
+                    className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1"
+                  >
+                    {t.dueDateLabel}
+                  </label>
+                  <input
+                    id="detail-task-duedate"
+                    type="date"
+                    value={task.dueDate}
+                    onChange={(e) => onUpdateTaskMeta(task.id, { dueDate: e.target.value })}
+                    className="w-full h-9 px-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="detail-task-duetime"
+                    className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1"
+                  >
+                    {t.dueTimeLabel}
+                  </label>
+                  <input
+                    id="detail-task-duetime"
+                    type="time"
+                    value={task.dueTime || ''}
+                    onChange={(e) => onUpdateTaskMeta(task.id, { dueTime: e.target.value })}
+                    className="w-full h-9 px-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
               </div>
             </div>
 

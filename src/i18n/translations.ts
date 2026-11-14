@@ -209,6 +209,75 @@ export interface TranslationDictionary {
   ghPagesStep2Desc: string;
   ghPagesStep3Title: string;
   ghPagesStep3Desc: string;
+  // Confirm Delete Modal
+  confirmDeleteTitle: string;
+  confirmDeleteMoveToTrashDesc: string;
+  confirmDeletePermanentDesc: string;
+  confirmDeleteButton: string;
+  confirmMoveToTrashButton: string;
+  confirmEmptyTrashTitle: string;
+  confirmEmptyTrashDesc: string;
+  confirmResetDemoTitle: string;
+  confirmResetDemoDesc: string;
+  // Trash Section
+  trashNav: string;
+  trashTitle: string;
+  trashSubtitle: string;
+  trashEmptyState: string;
+  restoreItemButton: string;
+  deletePermanentlyButton: string;
+  emptyTrashButton: string;
+  deletedAtLabel: string;
+  trashFilterAll: string;
+  trashFilterFoldersProjects: string;
+  trashFilterTasks: string;
+  trashFilterTodos: string;
+  trashFilterUpdatesMedia: string;
+  itemRestoredToast: string;
+  itemMovedToTrashToast: string;
+  todoTypeLabel: string;
+  subTodoTypeLabel: string;
+  updateTypeLabel: string;
+  attachmentTypeLabel: string;
+  // Notification Center & Due Reminders
+  notificationsNav: string;
+  notificationsTitle: string;
+  notificationsSubtitle: string;
+  noNotificationsYet: string;
+  markAllReadButton: string;
+  clearNotificationsButton: string;
+  checkRemindersNowButton: string;
+  enableBrowserNotifications: string;
+  browserNotificationsEnabled: string;
+  notifFilterAll: string;
+  notifFilterReminders: string;
+  notifFilterUpdates: string;
+  notifFilterUnread: string;
+  overdueReminderTitle: string;
+  dueTodayReminderTitle: string;
+  dueTomorrowReminderTitle: string;
+  dueTimeLabel: string;
+  notifCreatedLabel: string;
+  notifUpdatedLabel: string;
+  notifCompletedLabel: string;
+  notifMovedToTrashLabel: string;
+  notifRestoredLabel: string;
+  // Local Folder Auto-Overwrite Sync
+  localFolderSyncTitle: string;
+  localFolderSyncDesc: string;
+  chooseSaveFolderButton: string;
+  changeSaveFolderButton: string;
+  overwriteSaveNowButton: string;
+  loadFromFolderButton: string;
+  disconnectFolderButton: string;
+  connectedFolderLabel: string;
+  overwrittenFileLabel: string;
+  lastOverwrittenLabel: string;
+  overwriteCountLabel: string;
+  autoOverwriteActiveBadge: string;
+  folderNameInputPlaceholder: string;
+  localFolderConnectedSuccess: string;
+  localFolderOverwrittenSuccess: string;
 }
 
 export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
@@ -421,6 +490,71 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     ghPagesStep2Desc: 'In your GitHub repository, open Settings → Pages, and under "Build and deployment -> Source", select "GitHub Actions".',
     ghPagesStep3Title: '3. Automatic Rebuild on Every Push',
     ghPagesStep3Desc: 'Every time you push changes from AI Studio to GitHub, the deploy-pages.yml workflow automatically runs tests, builds, and updates your live GitHub Pages URL.',
+    confirmDeleteTitle: 'Confirm Deletion',
+    confirmDeleteMoveToTrashDesc: 'Are you sure you want to delete this item? It will be moved to Trash where you can restore it anytime or delete it permanently.',
+    confirmDeletePermanentDesc: 'Are you sure you want to permanently delete this item? This action cannot be undone.',
+    confirmDeleteButton: 'Delete Permanently',
+    confirmMoveToTrashButton: 'Move to Trash',
+    confirmEmptyTrashTitle: 'Empty Trash Permanently?',
+    confirmEmptyTrashDesc: 'All items currently in the Trash will be permanently deleted and cannot be recovered.',
+    confirmResetDemoTitle: 'Reset Workspace to Default Demo Data?',
+    confirmResetDemoDesc: 'This will replace your current workspace with the default sample folders, projects, and tasks.',
+    trashNav: 'Trash',
+    trashTitle: 'Trash & Deleted Items',
+    trashSubtitle: 'Restore deleted folders, projects, tasks, to-dos, sub-tasks, updates, or attachments, or delete them permanently to free storage.',
+    trashEmptyState: 'Trash is empty. Deleted items will appear here for safe recovery.',
+    restoreItemButton: 'Restore',
+    deletePermanentlyButton: 'Delete Forever',
+    emptyTrashButton: 'Empty Trash',
+    deletedAtLabel: 'Deleted',
+    trashFilterAll: 'All Items',
+    trashFilterFoldersProjects: 'Folders & Projects',
+    trashFilterTasks: 'Tasks',
+    trashFilterTodos: 'To-Dos & Sub-tasks',
+    trashFilterUpdatesMedia: 'Updates & Files',
+    itemRestoredToast: 'Item restored from Trash',
+    itemMovedToTrashToast: 'Moved to Trash',
+    todoTypeLabel: 'To-Do',
+    subTodoTypeLabel: 'Sub-task',
+    updateTypeLabel: 'Update',
+    attachmentTypeLabel: 'Attachment',
+    notificationsNav: 'Notifications',
+    notificationsTitle: 'Notifications, Updates & Due Reminders',
+    notificationsSubtitle: 'Live activity feed for all workspace changes, task updates, and automatic reminders for tasks with a due date or time.',
+    noNotificationsYet: 'No notifications or reminders matching this filter.',
+    markAllReadButton: 'Mark all read',
+    clearNotificationsButton: 'Clear all',
+    checkRemindersNowButton: 'Scan Due Tasks',
+    enableBrowserNotifications: 'Enable Browser Alerts',
+    browserNotificationsEnabled: 'Browser Alerts Active',
+    notifFilterAll: 'All',
+    notifFilterReminders: 'Due Reminders',
+    notifFilterUpdates: 'Updates & Changes',
+    notifFilterUnread: 'Unread',
+    overdueReminderTitle: 'Overdue Task Reminder',
+    dueTodayReminderTitle: 'Task Due Today Reminder',
+    dueTomorrowReminderTitle: 'Upcoming Task Due Tomorrow',
+    dueTimeLabel: 'Reminder Time',
+    notifCreatedLabel: 'Created',
+    notifUpdatedLabel: 'Updated',
+    notifCompletedLabel: 'Completed',
+    notifMovedToTrashLabel: 'Moved to Trash',
+    notifRestoredLabel: 'Restored from Trash',
+    localFolderSyncTitle: 'Local Folder Auto-Save (Single-File Overwrite)',
+    localFolderSyncDesc: 'Choose a local folder on your device. Every time you make changes, the app overwrites the exact same file (masar_workspace_autosave.json) in-place without creating duplicate files, saving storage space.',
+    chooseSaveFolderButton: 'Choose Local Save Folder',
+    changeSaveFolderButton: 'Change Folder',
+    overwriteSaveNowButton: 'Overwrite Save File Now',
+    loadFromFolderButton: 'Load from Saved File',
+    disconnectFolderButton: 'Disconnect Folder',
+    connectedFolderLabel: 'Target Save Folder',
+    overwrittenFileLabel: 'Single Overwritten File',
+    lastOverwrittenLabel: 'Last Overwritten',
+    overwriteCountLabel: 'In-Place Overwrites',
+    autoOverwriteActiveBadge: 'Single-File Auto-Overwrite Active',
+    folderNameInputPlaceholder: 'Local folder name (e.g. Documents/TaskTracker)...',
+    localFolderConnectedSuccess: 'Local save folder connected! All changes will overwrite masar_workspace_autosave.json in-place.',
+    localFolderOverwrittenSuccess: 'Overwrote masar_workspace_autosave.json in-place with latest changes (no duplicate files created).',
   },
   ar: {
     appName: 'متتبع المهام',
@@ -631,6 +765,71 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     ghPagesStep2Desc: 'في مستودعك على GitHub، افتح Settings ثم Pages، وتحت قسم Source اختر "GitHub Actions".',
     ghPagesStep3Title: '3. تحديث تلقائي عند كل دفع (Push)',
     ghPagesStep3Desc: 'في كل مرة تدفع فيها تعديلات جديدة من هنا إلى GitHub، سيقوم GitHub Actions تلقائياً ببناء التطبيق وتحديث موقعك على GitHub Pages.',
+    confirmDeleteTitle: 'تأكيد الحذف',
+    confirmDeleteMoveToTrashDesc: 'هل أنت متأكد من حذف هذا العنصر؟ سيتم نقله إلى سلة المحذوفات حيث يمكنك استعادته في أي وقت أو حذفه نهائياً.',
+    confirmDeletePermanentDesc: 'هل أنت متأكد من الحذف النهائي لهذا العنصر؟ لا يمكن التراجع عن هذا الإجراء.',
+    confirmDeleteButton: 'حذف نهائياً',
+    confirmMoveToTrashButton: 'نقل إلى سلة المحذوفات',
+    confirmEmptyTrashTitle: 'إفراغ سلة المحذوفات نهائياً؟',
+    confirmEmptyTrashDesc: 'سيتم حذف جميع العناصر الموجودة في سلة المحذوفات نهائياً ولا يمكن استعادتها.',
+    confirmResetDemoTitle: 'إعادة ضبط مساحة العمل للبيانات الافتراضية؟',
+    confirmResetDemoDesc: 'سيؤدي هذا إلى استبدال بياناتك الحالية بالمجلدات والمشاريع والمهام التجريبية الافتراضية.',
+    trashNav: 'سلة المحذوفات',
+    trashTitle: 'سلة المحذوفات والعناصر المحذوفة',
+    trashSubtitle: 'استعد المجلدات أو المشاريع أو المهام أو المهام الفرعية أو التحديثات أو المرفقات المحذوفة، أو احذفها نهائياً لتوفير المساحة.',
+    trashEmptyState: 'سلة المحذوفات فارغة. ستظهر العناصر المحذوفة هنا لاستعادتها بأمان.',
+    restoreItemButton: 'استعادة',
+    deletePermanentlyButton: 'حذف نهائي',
+    emptyTrashButton: 'إفراغ السلة',
+    deletedAtLabel: 'تاريخ الحذف',
+    trashFilterAll: 'جميع العناصر',
+    trashFilterFoldersProjects: 'المجلدات والمشاريع',
+    trashFilterTasks: 'المهام',
+    trashFilterTodos: 'المهام الفرعية',
+    trashFilterUpdatesMedia: 'التحديثات والملفات',
+    itemRestoredToast: 'تمت استعادة العنصر من سلة المحذوفات',
+    itemMovedToTrashToast: 'تم النقل إلى سلة المحذوفات',
+    todoTypeLabel: 'عنصر قائمة',
+    subTodoTypeLabel: 'مهمة فرعية',
+    updateTypeLabel: 'تحديث',
+    attachmentTypeLabel: 'مرفق',
+    notificationsNav: 'الإشعارات والتنبيهات',
+    notificationsTitle: 'مركز الإشعارات والتحديثات وتذكيرات المواعيد',
+    notificationsSubtitle: 'سجل تنبيهات فوري لجميع التغييرات والتحديثات وتذكيرات المهام التي لها تاريخ أو وقت استحقاق.',
+    noNotificationsYet: 'لا توجد إشعارات أو تذكيرات تطابق هذا الفلتر.',
+    markAllReadButton: 'تحديد الكل كمقروء',
+    clearNotificationsButton: 'مسح الكل',
+    checkRemindersNowButton: 'فحص مواعيد المهام',
+    enableBrowserNotifications: 'تفعيل تنبيهات المتصفح',
+    browserNotificationsEnabled: 'تنبيهات المتصفح مفعلة',
+    notifFilterAll: 'الكل',
+    notifFilterReminders: 'تذكيرات المواعيد',
+    notifFilterUpdates: 'التحديثات والتغييرات',
+    notifFilterUnread: 'غير مقروءة',
+    overdueReminderTitle: 'تذكير: مهمة متأخرة عن موعدها',
+    dueTodayReminderTitle: 'تذكير: مهمة تستحق اليوم',
+    dueTomorrowReminderTitle: 'تذكير: مهمة تستحق غداً',
+    dueTimeLabel: 'وقت التذكير',
+    notifCreatedLabel: 'تمت الإضافة',
+    notifUpdatedLabel: 'تم التحديث',
+    notifCompletedLabel: 'تم الإنجاز',
+    notifMovedToTrashLabel: 'نُقل إلى سلة المحذوفات',
+    notifRestoredLabel: 'تمت الاستعادة من السلة',
+    localFolderSyncTitle: 'حفظ تلقائي في مجلد محلي (الكتابة فوق الملف القديم لتوفير المساحة)',
+    localFolderSyncDesc: 'اختر مجلداً محلياً على جهازك. عند أي تعديل سيقوم التطبيق بالكتابة فوق نفس الملف (masar_workspace_autosave.json) مباشرة دون تكرار الملفات لتوفير مساحة التخزين.',
+    chooseSaveFolderButton: 'اختيار مجلد الحفظ المحلي',
+    changeSaveFolderButton: 'تغيير المجلد',
+    overwriteSaveNowButton: 'حفظ والكتابة فوق الملف الآن',
+    loadFromFolderButton: 'استعادة من الملف المحفوظ',
+    disconnectFolderButton: 'إلغاء ربط المجلد',
+    connectedFolderLabel: 'مجلد الحفظ المحدد',
+    overwrittenFileLabel: 'الملف الموحد المتجدد',
+    lastOverwrittenLabel: 'آخر تحديث للملف',
+    overwriteCountLabel: 'مرات الكتابة فوق الملف',
+    autoOverwriteActiveBadge: 'الكتابة التلقائية فوق الملف القديم نشطة',
+    folderNameInputPlaceholder: 'اسم مجلد الحفظ المحلي (مثال: Documents/TaskTracker)...',
+    localFolderConnectedSuccess: 'تم ربط مجلد الحفظ المحلي! سيتم تحديث نفس الملف masar_workspace_autosave.json تلقائياً دون تكرار.',
+    localFolderOverwrittenSuccess: 'تم حفظ التعديلات والكتابة فوق الملف القديم بنجاح دون استهلاك مساحة إضافية.',
   },
   he: {
     appName: 'מעקב משימות Task Tracker',
@@ -841,6 +1040,71 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     ghPagesStep2Desc: 'במאגר ה-GitHub שלך, עבור אל Settings → Pages, ותחת Source בחר ב-"GitHub Actions".',
     ghPagesStep3Title: '3. עדכון אוטומטי בכל Push',
     ghPagesStep3Desc: 'בכל פעם שתדחוף שינויים ל-GitHub, תהליך העבודה deploy-pages.yml יבנה ויעדכן אוטומטית את האתר החי שלך ב-GitHub Pages.',
+    confirmDeleteTitle: 'אישור מחיקה',
+    confirmDeleteMoveToTrashDesc: 'האם אתה בטוח שברצונך למחוק פריט זה? הוא יועבר לסל המיחזור ותוכל לשחזר אותו בכל עת או למחוק לצמיתות.',
+    confirmDeletePermanentDesc: 'האם אתה בטוח שברצונך למחוק פריט זה לצמיתות? לא ניתן לבטל פעולה זו.',
+    confirmDeleteButton: 'מחק לצמיתות',
+    confirmMoveToTrashButton: 'העבר לסל המיחזור',
+    confirmEmptyTrashTitle: 'לרוקן את סל המיחזור לצמיתות?',
+    confirmEmptyTrashDesc: 'כל הפריטים בסל המיחזור יימחקו לצמיתות ולא ניתן יהיה לשחזרם.',
+    confirmResetDemoTitle: 'לאפס סביבת עבודה לנתוני ברירת מחדל?',
+    confirmResetDemoDesc: 'פעולה זו תחליף את הנתונים הנוכחיים בתיקיות, פרויקטים ומשימות לדוגמה.',
+    trashNav: 'סל מיחזור',
+    trashTitle: 'סל מיחזור ופריטים שנמחקו',
+    trashSubtitle: 'שחזר תיקיות, פרויקטים, משימות, תתי-משימות, עדכונים או קבצים שנמחקו, או מחק אותם לצמיתות.',
+    trashEmptyState: 'סל המיחזור ריק. פריטים שנמחקו יופיעו כאן לשחזור בטוח.',
+    restoreItemButton: 'שחזר',
+    deletePermanentlyButton: 'מחק לצמיתות',
+    emptyTrashButton: 'רוקן סל מיחזור',
+    deletedAtLabel: 'נמחק ב-',
+    trashFilterAll: 'כל הפריטים',
+    trashFilterFoldersProjects: 'תיקיות ופרויקטים',
+    trashFilterTasks: 'משימות',
+    trashFilterTodos: 'מטלות ותתי-משימות',
+    trashFilterUpdatesMedia: 'עדכונים וקבצים',
+    itemRestoredToast: 'הפריט שוחזר מסל המיחזור',
+    itemMovedToTrashToast: 'הועבר לסל המיחזור',
+    todoTypeLabel: 'מטלה',
+    subTodoTypeLabel: 'תת-משימה',
+    updateTypeLabel: 'עדכון',
+    attachmentTypeLabel: 'קובץ מצורף',
+    notificationsNav: 'התראות ותזכורות',
+    notificationsTitle: 'מרכז התראות, עדכונים ותזכורות יעד',
+    notificationsSubtitle: 'יומן פעילות חי לכל השינויים, עדכוני המשימות ותזכורות אוטומטיות למשימות עם תאריך או שעת יעד.',
+    noNotificationsYet: 'אין התראות או תזכורות התואמות למסנן זה.',
+    markAllReadButton: 'סמן הכל כנקרא',
+    clearNotificationsButton: 'נקה הכל',
+    checkRemindersNowButton: 'בדוק משימות קרובות',
+    enableBrowserNotifications: 'הפעל התראות דפדפן',
+    browserNotificationsEnabled: 'התראות דפדפן פעילות',
+    notifFilterAll: 'הכל',
+    notifFilterReminders: 'תזכורות יעד',
+    notifFilterUpdates: 'עדכונים ושינויים',
+    notifFilterUnread: 'לא נקראו',
+    overdueReminderTitle: 'תזכורת: משימה באיחור',
+    dueTodayReminderTitle: 'תזכורת: משימה להיום',
+    dueTomorrowReminderTitle: 'תזכורת: משימה למחר',
+    dueTimeLabel: 'שעת תזכורת',
+    notifCreatedLabel: 'נוצר',
+    notifUpdatedLabel: 'עודכן',
+    notifCompletedLabel: 'הושלם',
+    notifMovedToTrashLabel: 'הועבר לסל המיחזור',
+    notifRestoredLabel: 'שוחזר מסל המיחזור',
+    localFolderSyncTitle: 'שמירה אוטומטית בתיקייה מקומית (דריסת קובץ ישן לחיסכון במקום)',
+    localFolderSyncDesc: 'בחר תיקייה מקומית במכשיר שלך. בכל שינוי האפליקציה דורסת את אותו הקובץ בדיוק (masar_workspace_autosave.json) ללא יצירת קבצים כפולים.',
+    chooseSaveFolderButton: 'בחר תיקיית שמירה מקומית',
+    changeSaveFolderButton: 'שנה תיקייה',
+    overwriteSaveNowButton: 'שמור ודרוס קובץ כעת',
+    loadFromFolderButton: 'טען מקובץ שמור',
+    disconnectFolderButton: 'נתק תיקייה',
+    connectedFolderLabel: 'תיקיית שמירה מחוברת',
+    overwrittenFileLabel: 'קובץ יחיד מתעדכן',
+    lastOverwrittenLabel: 'עדכון אחרון',
+    overwriteCountLabel: 'שמירות חוזרות על הקובץ',
+    autoOverwriteActiveBadge: 'דריסת קובץ אוטומטית פעילה',
+    folderNameInputPlaceholder: 'שם תיקייה מקומית (למשל Documents/TaskTracker)...',
+    localFolderConnectedSuccess: 'תיקיית השמירה המקומית חוברה! כל שינוי ידרוס את הקובץ masar_workspace_autosave.json.',
+    localFolderOverwrittenSuccess: 'הקובץ masar_workspace_autosave.json עודכן ונדרס בהצלחה ללא כפילויות.',
   },
 };
 

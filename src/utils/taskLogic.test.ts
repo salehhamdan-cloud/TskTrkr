@@ -400,4 +400,213 @@ test('app password defaults to S@120687h, verifies accurately, updates in localS
   assert.equal(verifyAppPassword('MySecret99'), true);
 });
 
+test('trash system moves folders, projects, tasks, todos, sub-todos, updates, and attachments to trash and restores them accurately', async () => {
+  const {
+    moveFolderToTrash,
+    moveProjectToTrash,
+    moveTaskToTrash,
+    moveTodoToTrash,
+    moveSubTodoToTrash,
+    moveUpdateToTrash,
+    moveAttachmentToTrash,
+    restoreTrashItem,
+    deleteTrashItemPermanently,
+    emptyTrash,
+    addSubTodoToTask,
+    addAttachmentToTask,
+  } = await import('./taskLogic.ts');
+
+  let task = makeMockTask();
+  task = addSubTodoToTask(task, 't1', 'Nested sub-step 1');
+  task = addAttachmentToTask(task, {
+    name: 'spec.pdf',
+    type: 'file',
+    mimeType: 'application/pdf',
+    sizeBytes: 2048,
+    url: 'data:application/pdf;base64,AA',
+  });
+  const subId = task.todos[0].subTodos![0].id;
+  const attId = task.attachments[0].id;
+
+  let state: WorkspaceState = {
+    folders: [{ id: 'fld-1', name: 'Engineering', createdAt: '2026-11-01T00:00:00Z' }],
+    projects: [
+      {
+        id: 'prj-1',
+        folderId: 'fld-1',
+        name: 'Mobile Core',
+        description: 'Core project',
+        createdAt: '2026-11-01T00:00:00Z',
+      },
+    ],
+    tasks: [task],
+    trash: [],
+    notifications: [],
+  };
+
+  // 1. Move sub-todo to trash & restore
+  state = moveSubTodoToTrash(state, 'task-1', 't1', subId);
+  assert.equal(state.tasks[0].todos[0].subTodos?.length, 0);
+  assert.equal(state.trash?.length, 1);
+  assert.equal(state.trash![0].itemType, 'subtodo');
+  state = restoreTrashItem(state, state.trash![0].id);
+  assert.equal(state.tasks[0].todos[0].subTodos?.length, 1);
+  assert.equal(state.trash?.length, 0);
+
+  // 2. Move todo to trash & restore
+  state = moveTodoToTrash(state, 'task-1', 't2');
+  assert.equal(state.tasks[0].todos.length, 1);
+  assert.equal(state.trash?.length, 1);
+  state = restoreTrashItem(state, state.trash![0].id);
+  assert.equal(state.tasks[0].todos.length, 2);
+
+  // 3. Move update to trash & restore
+  state = moveUpdateToTrash(state, 'task-1', 'u1');
+  assert.equal(state.tasks[0].updates.length, 0);
+  state = restoreTrashItem(state, state.trash![0].id);
+  assert.equal(state.tasks[0].updates.length, 1);
+
+  // 4. Move attachment to trash & restore
+  state = moveAttachmentToTrash(state, 'task-1', 'attachment', attId);
+  assert.equal(state.tasks[0].attachments.length, 0);
+  state = restoreTrashItem(state, state.trash![0].id);
+  assert.equal(state.tasks[0].attachments.length, 1);
+
+  // 5. Move task to trash & restore
+  state = moveTaskToTrash(state, 'task-1');
+  assert.equal(state.tasks.length, 0);
+  state = restoreTrashItem(state, state.trash![0].id);
+  assert.equal(state.tasks.length, 1);
+
+  // 6. Move project to trash & restore
+  state = moveProjectToTrash(state, 'prj-1');
+  assert.equal(state.projects.length, 0);
+  assert.equal(state.tasks.length, 0);
+  state = restoreTrashItem(state, state.trash![0].id);
+  assert.equal(state.projects.length, 1);
+  assert.equal(state.tasks.length, 1);
+
+  // 7. Move folder to trash & restore
+  state = moveFolderToTrash(state, 'fld-1');
+  assert.equal(state.folders.length, 0);
+  assert.equal(state.projects.length, 0);
+  assert.equal(state.tasks.length, 0);
+  state = restoreTrashItem(state, state.trash![0].id);
+  assert.equal(state.folders.length, 1);
+  assert.equal(state.projects.length, 1);
+  assert.equal(state.tasks.length, 1);
+
+  // 8. Permanent delete & empty trash
+  state = moveTaskToTrash(state, 'task-1');
+  const trashId = state.trash![0].id;
+  state = deleteTrashItemPermanently(state, trashId);
+  assert.equal(state.trash?.length, 0);
+
+  state = moveFolderToTrash(state, 'fld-1');
+  assert.equal(state.trash?.length, 1);
+  state = emptyTrash(state);
+  assert.equal(state.trash?.length, 0);
+});
+
+test('notification system logs updates, deduplicates due date and time reminders, and marks read', async () => {
+  const {
+    appendNotification,
+    generateDueTaskReminders,
+    markNotificationRead,
+    markAllNotificationsRead,
+    clearAllNotifications,
+  } = await import('./taskLogic.ts');
+
+  const overdueTask = makeMockTask({
+    id: 'tsk-overdue',
+    title: 'Overdue Task',
+    dueDate: '2026-11-10',
+    dueTime: '09:00',
+    status: 'in_progress',
+  });
+  const dueTodayTask = makeMockTask({
+    id: 'tsk-today',
+    title: 'Due Today Task',
+    dueDate: '2026-11-14',
+    dueTime: '18:00',
+    status: 'todo',
+  });
+
+  let state: WorkspaceState = {
+    folders: [],
+    projects: [],
+    tasks: [overdueTask, dueTodayTask],
+    trash: [],
+    notifications: [],
+  };
+
+  // Reference time: 2026-11-14 10:00 local
+  const refDate = new Date(2026, 10, 14, 10, 0, 0);
+  state = generateDueTaskReminders(state, refDate);
+  assert.equal(state.notifications?.length, 2);
+  assert.equal(state.notifications!.every((n) => n.category === 'reminder'), true);
+
+  // Deduplication check: running again on same date does not duplicate reminders
+  state = generateDueTaskReminders(state, refDate);
+  assert.equal(state.notifications?.length, 2);
+
+  // Append an activity update notification
+  state = appendNotification(state, {
+    category: 'update',
+    section: 'update',
+    title: 'Added Task Update',
+    message: 'Completed sensor calibration',
+  });
+  assert.equal(state.notifications?.length, 3);
+  assert.equal(state.notifications![0].read, false);
+
+  state = markNotificationRead(state, state.notifications![0].id);
+  assert.equal(state.notifications![0].read, true);
+
+  state = markAllNotificationsRead(state);
+  assert.equal(state.notifications!.every((n) => n.read), true);
+
+  state = clearAllNotifications(state);
+  assert.equal(state.notifications?.length, 0);
+});
+
+test('local folder auto-overwrite builds single-file payload for masar_workspace_autosave.json', async () => {
+  const localStore = new Map<string, string>();
+  (globalThis as unknown as { window: any }).window = {
+    localStorage: {
+      getItem: (key: string) => localStore.get(key) ?? null,
+      setItem: (key: string, val: string) => {
+        localStore.set(key, val);
+      },
+    },
+  };
+
+  const {
+    AUTOSAVE_FILENAME,
+    buildLocalOverwritePayload,
+    loadLocalFolderMeta,
+    saveLocalFolderMeta,
+  } = await import('./localFolderSync.ts');
+
+  assert.equal(AUTOSAVE_FILENAME, 'masar_workspace_autosave.json');
+  const defaultMeta = loadLocalFolderMeta();
+  assert.equal(defaultMeta.fileName, 'masar_workspace_autosave.json');
+
+  saveLocalFolderMeta({
+    ...defaultMeta,
+    isConnected: true,
+    folderName: 'MyPrivateTasks',
+    overwriteCount: 5,
+  });
+  const loaded = loadLocalFolderMeta();
+  assert.equal(loaded.isConnected, true);
+  assert.equal(loaded.folderName, 'MyPrivateTasks');
+  assert.equal(loaded.overwriteCount, 5);
+
+  const built = buildLocalOverwritePayload(getDefaultWorkspaceState(), 'en', true);
+  assert.equal(built.payload.overwrittenFile, 'masar_workspace_autosave.json');
+  assert.equal(built.byteLength > 100, true);
+});
+
+
 

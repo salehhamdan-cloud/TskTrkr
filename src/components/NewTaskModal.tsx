@@ -44,6 +44,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
   );
   const [priority, setPriority] = useState<TaskPriority>('high');
   const [dueDate, setDueDate] = useState('2026-11-22');
+  const [dueTime, setDueTime] = useState('09:00');
   const [todoDraft, setTodoDraft] = useState('');
   const [initialTodos, setInitialTodos] = useState<string[]>([]);
 
@@ -88,6 +89,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
       priority,
       status: 'todo',
       dueDate: dueDate || '2026-11-25',
+      dueTime: dueTime || undefined,
       manualProgress: 0,
       todos: pendingTodos.map((item, idx) => ({
         id: `td-new-${Date.now()}-${idx}`,
@@ -224,20 +226,37 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="new-task-due"
-                className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1"
-              >
-                {t.dueDateLabel}
-              </label>
-              <input
-                id="new-task-due"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full h-10 px-2.5 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
-              />
+            <div className="space-y-2">
+              <div>
+                <label
+                  htmlFor="new-task-due"
+                  className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1"
+                >
+                  {t.dueDateLabel}
+                </label>
+                <input
+                  id="new-task-due"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full h-9 px-2.5 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="new-task-duetime"
+                  className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1"
+                >
+                  {t.dueTimeLabel}
+                </label>
+                <input
+                  id="new-task-duetime"
+                  type="time"
+                  value={dueTime}
+                  onChange={(e) => setDueTime(e.target.value)}
+                  className="w-full h-9 px-2.5 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                />
+              </div>
             </div>
           </div>
 
