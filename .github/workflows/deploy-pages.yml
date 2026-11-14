@@ -27,19 +27,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
 
       - name: Run unit tests
         run: npx tsx --test src/utils/taskLogic.test.ts
 
       - name: Build production bundle for GitHub Pages
-        run: |
-          npm run build
-          cp dist/index.html dist/404.html
-          touch dist/.nojekyll
+        run: npm run build
 
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
