@@ -32,7 +32,7 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({
   return (
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
-      className="min-h-screen w-full flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 select-none"
+      className="h-dvh w-full max-w-[100vw] overflow-y-auto overflow-x-hidden flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 select-none"
     >
       <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
         {/* Icon & Brand Header */}

@@ -8,8 +8,36 @@
     --font-mono: 'JetBrains Mono', monospace;
   }
 
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100vw;
+    height: 100%;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     font-family: var(--font-sans);
+    touch-action: pan-y;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  input,
+  select,
+  textarea {
+    max-width: 100%;
   }
 
   h1, h2, h3, h4, .font-display {

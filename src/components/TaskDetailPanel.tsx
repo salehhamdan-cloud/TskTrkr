@@ -589,7 +589,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
       {/* Main Focused Task Card */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
         {/* Top Header of Task with Export PDF, Edit & Delete Task */}
-        <div className="p-6 border-b border-slate-100 dark:border-slate-800">
+        <div className="p-3.5 sm:p-6 border-b border-slate-100 dark:border-slate-800">
           {isEditingTaskHeader ? (
             <form onSubmit={handleSaveTaskHeader} className="space-y-3">
               <div>
@@ -632,9 +632,9 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
               </div>
             </form>
           ) : (
-            <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3.5 sm:gap-4">
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2 text-xs mb-2">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs mb-2">
                   <PriorityBadge priority={task.priority} t={t} size="sm" />
                   <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
                   <span className="font-semibold text-slate-700 dark:text-slate-300">
@@ -656,11 +656,11 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                     {task.dueTime ? ` · ${task.dueTime}` : ''}
                   </span>
                 </div>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 leading-snug">
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 leading-snug break-words">
                   {displayTitle}
                 </h1>
                 {displayDesc && (
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed">
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed break-words">
                     {displayDesc}
                   </p>
                 )}
@@ -704,11 +704,11 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
         </div>
 
         {/* Body Sections */}
-        <div className="p-6 space-y-8">
+        <div className="p-3.5 sm:p-6 space-y-6 sm:space-y-8">
           {/* SECTION 1: TASK PROGRESS BAR & STATUS / PRIORITY / DUE DATE */}
           <section
             aria-labelledby="task-progress-heading"
-            className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800"
+            className="bg-slate-50 dark:bg-slate-800/40 p-3.5 sm:p-4 rounded-xl border border-slate-200/80 dark:border-slate-800"
           >
             <div className="flex items-center justify-between gap-2 mb-2">
               <div>
@@ -799,11 +799,11 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
+              <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 gap-2 min-w-0">
+                <div className="min-w-0">
                   <label
                     htmlFor="detail-task-duedate"
-                    className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1"
+                    className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 truncate"
                   >
                     {t.dueDateLabel}
                   </label>
@@ -812,13 +812,13 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                     type="date"
                     value={task.dueDate}
                     onChange={(e) => onUpdateTaskMeta(task.id, { dueDate: e.target.value })}
-                    className="w-full h-9 px-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    className="w-full min-w-0 h-9 px-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label
                     htmlFor="detail-task-duetime"
-                    className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1"
+                    className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 truncate"
                   >
                     {t.dueTimeLabel}
                   </label>
@@ -827,7 +827,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                     type="time"
                     value={task.dueTime || ''}
                     onChange={(e) => onUpdateTaskMeta(task.id, { dueTime: e.target.value })}
-                    className="w-full h-9 px-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    className="w-full min-w-0 h-9 px-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                   />
                 </div>
               </div>
@@ -926,38 +926,38 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                       onChange={(e) => setNewTodoTitle(e.target.value)}
                       placeholder={t.todoInputPlaceholder}
                       aria-label={t.todoInputPlaceholder}
-                      className="flex-1 h-10 px-3.5 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                      className="w-full sm:w-auto sm:flex-1 min-w-0 h-10 px-3.5 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                     />
-                <input
-                  ref={newTodoPhotoInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => {
-                    readImageFilesAsPayloads(e.target.files, (items) => {
-                      setStagedTodoPhotos((prev) => [...prev, ...items]);
-                    });
-                    e.target.value = '';
-                  }}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => newTodoPhotoInputRef.current?.click()}
-                  aria-label={t.attachTodoPhoto}
-                  className="h-10 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium inline-flex items-center gap-1.5 shrink-0 cursor-pointer"
-                >
-                  <ImageIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  <span>{t.attachTodoPhoto}</span>
-                </button>
-                <button
-                  type="submit"
-                  className="h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>{t.addTodoButton}</span>
-                </button>
-              </div>
+                    <input
+                      ref={newTodoPhotoInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => {
+                        readImageFilesAsPayloads(e.target.files, (items) => {
+                          setStagedTodoPhotos((prev) => [...prev, ...items]);
+                        });
+                        e.target.value = '';
+                      }}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => newTodoPhotoInputRef.current?.click()}
+                      aria-label={t.attachTodoPhoto}
+                      className="flex-1 sm:flex-initial justify-center h-10 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium inline-flex items-center gap-1.5 shrink-0 cursor-pointer"
+                    >
+                      <ImageIcon className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                      <span className="truncate">{t.attachTodoPhoto}</span>
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 sm:flex-initial justify-center h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4 shrink-0" />
+                      <span>{t.addTodoButton}</span>
+                    </button>
+                  </div>
 
               {stagedTodoPhotos.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -1137,7 +1137,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                       {/* Sub-Todos Section */}
                       {((todo.subTodos && todo.subTodos.length > 0 && !collapsedTodoSubs[todo.id]) ||
                         addingSubTodoForId === todo.id) && (
-                        <div className="mt-2.5 ms-6 ps-3 border-s-2 border-slate-200 dark:border-slate-700 space-y-2">
+                        <div className="mt-2.5 ms-3 sm:ms-6 ps-2.5 sm:ps-3 border-s-2 border-slate-200 dark:border-slate-700 space-y-2">
                           {todo.subTodos && todo.subTodos.length > 0 && !collapsedTodoSubs[todo.id] && (
                             <ul className="space-y-1.5">
                               {todo.subTodos.map((sub) => {
@@ -1152,7 +1152,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                                     className="flex items-center justify-between gap-2 py-1 px-2 rounded-md hover:bg-slate-100/60 dark:hover:bg-slate-800/40 text-xs"
                                   >
                                     {editingSubTodoId === sub.id ? (
-                                      <div className="flex items-center gap-1.5 flex-1">
+                                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                         <input
                                           type="text"
                                           value={editingSubTodoTitle}
@@ -1167,7 +1167,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                                             if (e.key === 'Escape')
                                               setEditingSubTodoId(null);
                                           }}
-                                          className="flex-1 h-7 px-2 text-xs rounded border border-blue-600 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                                          className="flex-1 min-w-0 h-7 px-2 text-xs rounded border border-blue-600 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                                         />
                                         <button
                                           type="button"
@@ -1175,7 +1175,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                                             handleSaveSubTodoEdit(todo.id, sub.id)
                                           }
                                           aria-label={t.saveChanges}
-                                          className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                                          className="p-1 text-emerald-600 hover:bg-emerald-50 rounded shrink-0"
                                         >
                                           <Check className="w-3.5 h-3.5" />
                                         </button>
@@ -1183,7 +1183,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                                           type="button"
                                           onClick={() => setEditingSubTodoId(null)}
                                           aria-label={t.cancel}
-                                          className="p-1 text-slate-400 hover:bg-slate-100 rounded"
+                                          className="p-1 text-slate-400 hover:bg-slate-100 rounded shrink-0"
                                         >
                                           <X className="w-3.5 h-3.5" />
                                         </button>
@@ -1202,7 +1202,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                                             className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-blue-600 shrink-0"
                                           />
                                           <span
-                                            className={`leading-snug ${
+                                            className={`leading-snug break-words ${
                                               sub.completed
                                                 ? 'line-through text-slate-400 dark:text-slate-500'
                                                 : 'text-slate-700 dark:text-slate-300'
@@ -1246,7 +1246,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                           {addingSubTodoForId === todo.id ? (
                             <form
                               onSubmit={(e) => handleAddSubTodoSubmit(todo.id, e)}
-                              className="flex items-center gap-1.5 pt-1"
+                              className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 pt-1"
                             >
                               <input
                                 type="text"
@@ -1255,7 +1255,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                                 placeholder={t.subTodoInputPlaceholder}
                                 aria-label={t.subTodoInputPlaceholder}
                                 autoFocus
-                                className="flex-1 h-7 px-2.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                                className="w-full sm:w-auto sm:flex-1 min-w-0 h-7 px-2.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
                               />
                               <button
                                 type="submit"

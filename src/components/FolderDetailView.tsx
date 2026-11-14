@@ -169,37 +169,37 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
       {/* Folder Focus Header Card */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-6">
         {isEditingFolder ? (
-          <form onSubmit={handleSaveFolder} className="flex items-center gap-2 mb-4">
+          <form onSubmit={handleSaveFolder} className="flex flex-wrap sm:flex-nowrap items-center gap-2 mb-4">
             <input
               type="text"
               value={folderNameDraft}
               onChange={(e) => setFolderNameDraft(e.target.value)}
               aria-label={t.editFolder}
               autoFocus
-              className="flex-1 h-10 px-3 text-base font-bold rounded-lg border border-blue-600 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+              className="w-full sm:w-auto sm:flex-1 min-w-0 h-10 px-3 text-base font-bold rounded-lg border border-blue-600 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
             />
             <button
               type="submit"
-              className="h-10 px-4 bg-blue-600 text-white text-xs font-semibold rounded-lg"
+              className="h-10 px-4 bg-blue-600 text-white text-xs font-semibold rounded-lg shrink-0"
             >
               {t.saveChanges}
             </button>
             <button
               type="button"
               onClick={() => setIsEditingFolder(false)}
-              className="h-10 px-3 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+              className="h-10 px-3 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg shrink-0"
             >
               {t.cancel}
             </button>
           </form>
         ) : (
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 mb-4">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                 <Folder className="w-5 h-5" />
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 break-words">
                   {folderDisplayName}
                 </h1>
                 <p className="text-xs text-slate-500 dark:text-slate-400 font-mono tabular-nums mt-0.5">
@@ -208,7 +208,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -256,7 +256,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
       {/* Add New Project / Group Form */}
       <form
         onSubmit={handleAddProject}
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-3"
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3"
       >
         <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
           {t.addProject}
@@ -421,7 +421,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
             return (
               <div
                 key={proj.id}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 sm:p-5 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
               >
                 {editingProjectId === proj.id ? (
                   <div className="space-y-3">

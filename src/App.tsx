@@ -1195,26 +1195,26 @@ export default function App() {
   return (
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
-      className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+      className="h-dvh w-full max-w-[100vw] overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
     >
       {/* CLEAN MODERN TOP HEADER WITH GLOBAL SEARCH, NOTIFICATIONS, TRASH & SETTINGS */}
-      <header className="sticky top-0 z-30 h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-3">
+      <header className="shrink-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-2.5 py-2 sm:py-0 sm:px-6 sm:h-14 flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-1.5 gap-y-2 sm:gap-3 w-full max-w-[100vw]">
         {/* Left / Start: Mobile menu button + App Brand */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="order-1 flex items-center gap-1.5 sm:gap-3 min-w-0 shrink">
           <button
             type="button"
             onClick={() => setIsMobileSidebarOpen(true)}
             aria-label={t.openMenu}
-            className="lg:hidden min-h-[40px] min-w-[40px] flex items-center justify-center -ms-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+            className="lg:hidden h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
           >
             <Menu className="w-5 h-5" />
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
               onClick={() => setSelectedNode({ type: 'dashboard' })}
-              className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap cursor-pointer font-display hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate max-w-[115px] xs:max-w-[160px] sm:max-w-none cursor-pointer font-display hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
             >
               {t.appName}
             </button>
@@ -1224,7 +1224,7 @@ export default function App() {
             </span>
           </div>
 
-          <span className="hidden 2xl:inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 ms-1">
+          <span className="hidden 2xl:inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 ms-1 shrink-0">
             {localFolderMeta.isConnected ? (
               <>
                 <FolderOpen className="w-3.5 h-3.5" />
@@ -1239,10 +1239,10 @@ export default function App() {
           </span>
         </div>
 
-        {/* Center: Global Workspace Search Bar */}
+        {/* Center (Row 2 on <640px mobile, Center on >=640px): Global Workspace Search Bar */}
         <div
           ref={searchContainerRef}
-          className="relative flex-1 max-w-md mx-auto"
+          className="order-3 w-full sm:order-2 sm:w-auto sm:flex-1 sm:max-w-md sm:mx-auto relative min-w-0"
         >
           <div className="relative flex items-center">
             <Search className="w-4 h-4 text-slate-400 absolute start-3 pointer-events-none" />
@@ -1256,7 +1256,7 @@ export default function App() {
               }}
               placeholder={t.globalSearchPlaceholder}
               aria-label={t.globalSearchPlaceholder}
-              className="w-full h-9 ps-9 pe-8 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:bg-white dark:focus:bg-slate-900 transition-colors"
+              className="w-full h-8 sm:h-9 ps-9 pe-8 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:bg-white dark:focus:bg-slate-900 transition-colors"
             />
             {globalSearchQuery && (
               <button
@@ -1275,7 +1275,7 @@ export default function App() {
 
           {/* Search Results Dropdown */}
           {isSearchOpen && globalSearchQuery.trim().length > 0 && (
-            <div className="absolute start-0 end-0 top-11 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+            <div className="absolute start-0 end-0 top-10 sm:top-11 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
               {searchResults.length === 0 ? (
                 <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400">
                   {t.noSearchResults}
@@ -1333,8 +1333,10 @@ export default function App() {
         </div>
 
         {/* Right / End: PWA Install + Notifications + Trash + Settings + Theme + Lock + New Task */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          <PWAInstallButton t={t} variant="compact" />
+        <div className="order-2 sm:order-3 flex items-center gap-1 sm:gap-2 shrink-0">
+          <div className="hidden md:block">
+            <PWAInstallButton t={t} variant="compact" />
+          </div>
 
           {/* Notifications Bell Icon Button */}
           <button
@@ -1343,15 +1345,15 @@ export default function App() {
             onClick={() => setSelectedNode({ type: 'notifications' })}
             aria-label={t.notificationsNav}
             title={t.notificationsNav}
-            className={`relative h-9 min-w-[36px] px-2.5 rounded-lg border inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
+            className={`relative h-8 min-w-[30px] px-1.5 sm:h-9 sm:min-w-[36px] sm:px-2.5 rounded-lg border inline-flex items-center justify-center gap-1 text-xs font-medium transition-colors cursor-pointer ${
               selectedNode.type === 'notifications'
                 ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
                 : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            <Bell className="w-4 h-4" />
+            <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             {unreadNotificationsCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-blue-600 text-white">
+              <span className="px-1 sm:px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-mono font-bold bg-blue-600 text-white">
                 {unreadNotificationsCount}
               </span>
             )}
@@ -1364,15 +1366,15 @@ export default function App() {
             onClick={() => setSelectedNode({ type: 'trash' })}
             aria-label={t.trashNav}
             title={t.trashNav}
-            className={`relative h-9 min-w-[36px] px-2.5 rounded-lg border inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
+            className={`relative h-8 min-w-[30px] px-1.5 sm:h-9 sm:min-w-[36px] sm:px-2.5 rounded-lg border inline-flex items-center justify-center gap-1 text-xs font-medium transition-colors cursor-pointer ${
               selectedNode.type === 'trash'
                 ? 'border-rose-600 bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
                 : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             {trashItems.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-semibold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300">
+              <span className="px-1 sm:px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-mono font-semibold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300">
                 {trashItems.length}
               </span>
             )}
@@ -1385,13 +1387,13 @@ export default function App() {
             onClick={() => setSelectedNode({ type: 'settings' })}
             aria-label={t.settingsNav}
             title={t.settingsNav}
-            className={`h-9 min-w-[36px] px-2.5 rounded-lg border inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
+            className={`h-8 min-w-[30px] px-1.5 sm:h-9 sm:min-w-[36px] sm:px-2.5 rounded-lg border inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
               selectedNode.type === 'settings'
                 ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
                 : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             <span className="hidden xl:inline">{t.settingsNav}</span>
           </button>
 
@@ -1401,9 +1403,13 @@ export default function App() {
             data-testid="header-theme-btn"
             onClick={() => setIsDarkMode((d) => !d)}
             aria-label={isDarkMode ? t.lightTheme : t.darkTheme}
-            className="h-9 min-w-[36px] px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1.5 text-xs font-medium cursor-pointer"
+            className="h-8 min-w-[30px] px-1.5 sm:h-9 sm:min-w-[36px] sm:px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1.5 text-xs font-medium cursor-pointer"
           >
-            {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {isDarkMode ? (
+              <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            ) : (
+              <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            )}
             <span className="hidden 2xl:inline">
               {isDarkMode ? t.lightTheme : t.darkTheme}
             </span>
@@ -1416,9 +1422,9 @@ export default function App() {
             onClick={handleLockApp}
             aria-label={t.lockAppButton}
             title={t.lockAppButton}
-            className="h-9 min-w-[36px] px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer"
+            className="h-8 min-w-[30px] px-1.5 sm:h-9 sm:min-w-[36px] sm:px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer"
           >
-            <Lock className="w-4 h-4" />
+            <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             <span className="hidden 2xl:inline">{t.lockAppButton}</span>
           </button>
 
@@ -1432,19 +1438,20 @@ export default function App() {
                 projectId: activeProject?.id || activeTask?.projectId,
               })
             }
-            className="h-9 px-2.5 sm:px-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+            aria-label={t.newTaskButton}
+            className="h-8 px-2 sm:h-9 sm:px-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             <span className="hidden sm:inline">{t.newTaskButton}</span>
           </button>
         </div>
       </header>
 
       {/* BODY: SIDE LIST + SINGLE FOCUSED MAIN VIEW */}
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex min-h-0 min-w-0 w-full overflow-hidden">
         {/* Desktop Persistent Side List (288px) */}
-        <div className="hidden lg:block w-72 shrink-0">
-          <div className="sticky top-14 h-[calc(100vh-3.5rem)]">
+        <div className="hidden lg:block w-72 shrink-0 h-full overflow-hidden">
+          <div className="h-full">
             <SidebarTree
               folders={workspace.folders}
               projects={workspace.projects}
@@ -1520,7 +1527,10 @@ export default function App() {
         )}
 
         {/* FOCUSED MAIN CANVAS */}
-        <main className="flex-1 min-w-0 px-3.5 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 lg:pb-8 overflow-y-auto">
+        <main
+          key={`${selectedNode.type}-${'id' in selectedNode ? selectedNode.id : 'root'}`}
+          className="flex-1 min-w-0 min-h-0 w-full max-w-full px-3 sm:px-6 lg:px-8 pt-3.5 sm:pt-6 pb-20 lg:pb-8 overflow-y-auto overflow-x-hidden overscroll-y-contain"
+        >
           {selectedNode.type === 'settings' && (
             <SettingsView
               workspace={workspace}
@@ -1666,7 +1676,7 @@ export default function App() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-20 lg:bottom-5 end-4 z-40 max-w-sm bg-slate-900 dark:bg-slate-800 text-white border border-slate-700 rounded-xl shadow-xl p-3.5 flex items-start gap-3"
+          className="fixed bottom-18 lg:bottom-5 inset-x-3 sm:inset-x-auto sm:end-4 z-40 sm:max-w-sm bg-slate-900 dark:bg-slate-800 text-white border border-slate-700 rounded-xl shadow-xl p-3 flex items-start gap-3"
         >
           <div className="w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0 mt-0.5">
             <Bell className="w-4 h-4" />
@@ -1701,7 +1711,7 @@ export default function App() {
       {/* MOBILE & TABLET FIXED BOTTOM THUMB-ZONE NAVIGATION BAR (< 1024px) */}
       <nav
         aria-label={t.sidebarTitle}
-        className="lg:hidden fixed bottom-0 inset-x-0 z-40 h-16 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 grid grid-cols-5 items-center px-1.5"
+        className="lg:hidden shrink-0 z-40 h-15 w-full max-w-[100vw] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 grid grid-cols-5 items-center px-1"
       >
         <button
           type="button"

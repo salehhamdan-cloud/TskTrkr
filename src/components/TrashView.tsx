@@ -173,7 +173,7 @@ export const TrashView: React.FC<TrashViewProps> = ({
             ))}
           </div>
 
-          <div className="relative min-w-[200px] flex-1 sm:flex-initial">
+          <div className="relative w-full sm:w-auto sm:min-w-[200px] sm:flex-initial">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="search"
@@ -229,7 +229,7 @@ export const TrashView: React.FC<TrashViewProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <div className="flex flex-wrap items-center gap-2 shrink-0 self-end sm:self-center">
                 <button
                   type="button"
                   data-testid={`restore-trash-${item.id}`}

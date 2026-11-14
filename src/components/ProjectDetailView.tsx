@@ -329,17 +329,17 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             </div>
           </form>
         ) : (
-          <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
-            <div className="flex items-start gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3.5 sm:gap-4 mb-4">
+            <div className="flex items-start gap-3 min-w-0 flex-1">
               <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
                 <Layers className="w-5 h-5" />
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 break-words">
                   {projectDisplayName}
                 </h1>
                 {projectDisplayDesc && (
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 break-words">
                     {projectDisplayDesc}
                   </p>
                 )}
@@ -434,7 +434,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             {/* Top Toolbar: Search + Sort Dropdown */}
             <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
               {/* Quick Search */}
-              <div className="relative flex-1 min-w-[200px]">
+              <div className="relative w-full sm:w-auto sm:flex-1 min-w-0">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
@@ -457,8 +457,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               </div>
 
               {/* Sort Dropdown */}
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline-flex items-center gap-1">
+              <div className="flex items-center gap-1.5 flex-1 sm:flex-initial min-w-0">
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline-flex items-center gap-1 shrink-0">
                   <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
                   <span>{t.sortBy}:</span>
                 </span>
@@ -466,7 +466,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
                   aria-label={t.sortBy}
-                  className="h-9 px-2.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 cursor-pointer focus:outline-none focus:border-blue-600"
+                  className="w-full sm:w-auto min-w-0 h-9 px-2.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 cursor-pointer focus:outline-none focus:border-blue-600"
                 >
                   <option value="default">{t.sortDefault}</option>
                   <option value="dueDateAsc">{t.sortDueDateAsc}</option>
@@ -666,7 +666,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             return (
               <div
                 key={task.id}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 sm:p-5 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
               >
                 {editingTaskId === task.id ? (
                   <div className="space-y-3">

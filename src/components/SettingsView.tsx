@@ -255,7 +255,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* Section 1: Interface Language */}
-      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs space-y-4">
+      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-6 shadow-xs space-y-4">
         <div className="flex items-start gap-3">
           <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
             <Globe className="w-4.5 h-4.5" />
@@ -301,8 +301,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </section>
 
       {/* Section 2: Appearance */}
-      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs space-y-4">
-        <div className="flex items-center justify-between gap-4">
+      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-6 shadow-xs space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 shrink-0">
               {darkMode ? <Moon className="w-4.5 h-4.5 text-blue-400" /> : <Sun className="w-4.5 h-4.5 text-amber-500" />}
@@ -379,7 +379,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </section>
 
       {/* Section 3: Backup & Restore */}
-      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs space-y-5">
+      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-6 shadow-xs space-y-5">
         <div className="flex items-start gap-3">
           <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
             <HardDrive className="w-4.5 h-4.5" />
