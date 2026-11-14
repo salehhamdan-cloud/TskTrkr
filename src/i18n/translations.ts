@@ -200,6 +200,15 @@ export interface TranslationDictionary {
   updatePasswordButton: string;
   passwordUpdatedSuccess: string;
   passwordMismatchError: string;
+  ghPagesTitle: string;
+  ghPagesDesc: string;
+  ghPagesReadyBadge: string;
+  ghPagesStep1Title: string;
+  ghPagesStep1Desc: string;
+  ghPagesStep2Title: string;
+  ghPagesStep2Desc: string;
+  ghPagesStep3Title: string;
+  ghPagesStep3Desc: string;
 }
 
 export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
@@ -403,6 +412,15 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     updatePasswordButton: 'Update Password',
     passwordUpdatedSuccess: 'App password updated successfully.',
     passwordMismatchError: 'Current password is incorrect or new passwords do not match.',
+    ghPagesTitle: 'GitHub Pages Publishing & Automatic Sync',
+    ghPagesDesc: 'Configured with relative asset paths (./), SPA 404 fallback, .nojekyll, and an automated GitHub Actions workflow (.github/workflows/deploy-pages.yml).',
+    ghPagesReadyBadge: 'GitHub Actions Auto-Deploy Ready',
+    ghPagesStep1Title: '1. Push / Sync from AI Studio to GitHub',
+    ghPagesStep1Desc: 'Click the GitHub icon in the top bar of AI Studio to export or push your latest changes to your GitHub repository (main branch).',
+    ghPagesStep2Title: '2. Enable GitHub Actions Pages (One-Time Setup)',
+    ghPagesStep2Desc: 'In your GitHub repository, open Settings → Pages, and under "Build and deployment -> Source", select "GitHub Actions".',
+    ghPagesStep3Title: '3. Automatic Rebuild on Every Push',
+    ghPagesStep3Desc: 'Every time you push changes from AI Studio to GitHub, the deploy-pages.yml workflow automatically runs tests, builds, and updates your live GitHub Pages URL.',
   },
   ar: {
     appName: 'متتبع المهام',
@@ -604,6 +622,15 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     updatePasswordButton: 'تحديث كلمة المرور',
     passwordUpdatedSuccess: 'تم تحديث كلمة مرور التطبيق بنجاح.',
     passwordMismatchError: 'كلمة المرور الحالية غير صحيحة أو كلمة المرور الجديدة غير متطابقة.',
+    ghPagesTitle: 'النشر على GitHub Pages والمزامنة التلقائية',
+    ghPagesDesc: 'التطبيق مهيأ بالكامل بمسارات نسبية (./) وملف 404.html وملف سير عمل تلقائي (.github/workflows/deploy-pages.yml).',
+    ghPagesReadyBadge: 'جاهز للنشر التلقائي عبر GitHub Actions',
+    ghPagesStep1Title: '1. ربط ومزامنة الكود من AI Studio إلى GitHub',
+    ghPagesStep1Desc: 'اضغط على أيقونة GitHub في الشريط العلوي داخل AI Studio لرفع ومزامنة التعديلات مباشرة إلى مستودعك في GitHub (فرع main).',
+    ghPagesStep2Title: '2. تفعيل GitHub Pages (مرة واحدة فقط)',
+    ghPagesStep2Desc: 'في مستودعك على GitHub، افتح Settings ثم Pages، وتحت قسم Source اختر "GitHub Actions".',
+    ghPagesStep3Title: '3. تحديث تلقائي عند كل دفع (Push)',
+    ghPagesStep3Desc: 'في كل مرة تدفع فيها تعديلات جديدة من هنا إلى GitHub، سيقوم GitHub Actions تلقائياً ببناء التطبيق وتحديث موقعك على GitHub Pages.',
   },
   he: {
     appName: 'מעקב משימות Task Tracker',
@@ -805,6 +832,15 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     updatePasswordButton: 'עדכן סיסמה',
     passwordUpdatedSuccess: 'סיסמת האפליקציה עודכנה בהצלחה.',
     passwordMismatchError: 'הסיסמה הנוכחית שגויה או שהסיסמאות החדשות אינן תואמות.',
+    ghPagesTitle: 'פרסום ב-GitHub Pages וסנכרון אוטומטי',
+    ghPagesDesc: 'מוגדר עם נתיבים יחסיים (./), גיבוי 404.html ותהליך עבודה אוטומטי (.github/workflows/deploy-pages.yml).',
+    ghPagesReadyBadge: 'מוכן לפריסה אוטומטית ב-GitHub Actions',
+    ghPagesStep1Title: '1. דחיפה / סנכרון מ-AI Studio ל-GitHub',
+    ghPagesStep1Desc: 'לחץ על סמל GitHub בסרגל העליון של AI Studio כדי לדחוף את השינויים האחרונים למאגר ה-GitHub שלך (ענף main).',
+    ghPagesStep2Title: '2. הפעלת GitHub Pages (הגדרה חד-פעמית)',
+    ghPagesStep2Desc: 'במאגר ה-GitHub שלך, עבור אל Settings → Pages, ותחת Source בחר ב-"GitHub Actions".',
+    ghPagesStep3Title: '3. עדכון אוטומטי בכל Push',
+    ghPagesStep3Desc: 'בכל פעם שתדחוף שינויים ל-GitHub, תהליך העבודה deploy-pages.yml יבנה ויעדכן אוטומטית את האתר החי שלך ב-GitHub Pages.',
   },
 };
 

@@ -13,6 +13,7 @@ import {
   Smartphone,
   Lock,
   KeyRound,
+  GitBranch,
 } from 'lucide-react';
 import { LanguageCode, WorkspaceState } from '../types/task';
 import { TranslationDictionary } from '../i18n/translations';
@@ -565,6 +566,59 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
         </form>
+      </section>
+
+      {/* Section 7: GitHub Pages Publishing & Automatic Sync */}
+      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+              <GitBranch className="w-4.5 h-4.5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                {t.ghPagesTitle}
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                {t.ghPagesDesc}
+              </p>
+            </div>
+          </div>
+
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300">
+            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+            {t.ghPagesReadyBadge}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+          <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
+            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+              {t.ghPagesStep1Title}
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {t.ghPagesStep1Desc}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
+            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+              {t.ghPagesStep2Title}
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {t.ghPagesStep2Desc}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
+            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+              {t.ghPagesStep3Title}
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {t.ghPagesStep3Desc}
+            </p>
+          </div>
+        </div>
       </section>
     </div>
   );

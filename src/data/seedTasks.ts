@@ -118,7 +118,7 @@ export const SEED_TASKS: TaskItem[] = [
             type: 'photo',
             mimeType: 'image/jpeg',
             sizeBytes: 428500,
-            url: '/src/assets/images/task_photo_wireframe_board_1794335934785.jpg',
+            url: './assets/images/task_photo_wireframe_board_1794335934785.jpg',
             addedAt: '2026-11-07T09:15:00.000Z',
             caption: 'Verified offline storage schema diagram',
             localizedCaption: {
@@ -209,7 +209,7 @@ export const SEED_TASKS: TaskItem[] = [
             type: 'photo',
             mimeType: 'image/jpeg',
             sizeBytes: 589200,
-            url: '/src/assets/images/task_photo_hardware_prototype_1794335934786.jpg',
+            url: './assets/images/task_photo_hardware_prototype_1794335934786.jpg',
             addedAt: '2026-11-10T09:45:00.000Z',
             caption: 'Bench test verification snapshot attached to update log',
             localizedCaption: {
@@ -240,7 +240,7 @@ export const SEED_TASKS: TaskItem[] = [
         type: 'photo',
         mimeType: 'image/jpeg',
         sizeBytes: 428500,
-        url: '/src/assets/images/task_photo_wireframe_board_1794335934785.jpg',
+        url: './assets/images/task_photo_wireframe_board_1794335934785.jpg',
         addedAt: '2026-11-09T16:25:00.000Z',
         caption: 'Adaptive desktop & mobile wireframe layout study',
         localizedCaption: {
@@ -475,7 +475,7 @@ export const SEED_TASKS: TaskItem[] = [
         type: 'photo',
         mimeType: 'image/jpeg',
         sizeBytes: 589200,
-        url: '/src/assets/images/task_photo_hardware_prototype_1794335934786.jpg',
+        url: './assets/images/task_photo_hardware_prototype_1794335934786.jpg',
         addedAt: '2026-11-10T08:15:00.000Z',
         caption: 'Anodized SF-210 IoT sensor prototype with caliper verification',
         localizedCaption: {

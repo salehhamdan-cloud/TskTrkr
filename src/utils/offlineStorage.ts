@@ -30,7 +30,8 @@ export function loadWorkspaceFromLocalStorage(): WorkspaceState {
       window.localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(initial));
       return initial;
     }
-    const parsed = JSON.parse(raw) as Partial<WorkspaceState>;
+    const normalizedRaw = raw.replace(/\/src\/assets\/images\//g, './assets/images/');
+    const parsed = JSON.parse(normalizedRaw) as Partial<WorkspaceState>;
     if (
       parsed &&
       Array.isArray(parsed.folders) &&
