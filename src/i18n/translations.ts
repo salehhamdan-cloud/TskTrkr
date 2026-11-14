@@ -278,6 +278,14 @@ export interface TranslationDictionary {
   folderNameInputPlaceholder: string;
   localFolderConnectedSuccess: string;
   localFolderOverwrittenSuccess: string;
+  folderPickerModalTitle: string;
+  folderPickerModalSubtitle: string;
+  folderPickerDeviceFoldersHeading: string;
+  folderPickerCreateNewLabel: string;
+  folderPickerNewFolderPlaceholder: string;
+  folderPickerSelectButton: string;
+  folderPickerOpenNativeFilesButton: string;
+  folderPickerShareToFilesButton: string;
 }
 
 export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
@@ -555,6 +563,14 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     folderNameInputPlaceholder: 'Local folder name (e.g. Documents/TaskTracker)...',
     localFolderConnectedSuccess: 'Local save folder connected! All changes will overwrite masar_workspace_autosave.json in-place.',
     localFolderOverwrittenSuccess: 'Overwrote masar_workspace_autosave.json in-place with latest changes (no duplicate files created).',
+    folderPickerModalTitle: 'Select Device Save Folder',
+    folderPickerModalSubtitle: 'Choose a folder on your phone, tablet, or computer where masar_workspace_autosave.json will be overwritten automatically.',
+    folderPickerDeviceFoldersHeading: 'Device & Storage Folders',
+    folderPickerCreateNewLabel: 'Or Create a New Folder',
+    folderPickerNewFolderPlaceholder: 'New folder name (e.g. PhoneStorage/MyTasks)...',
+    folderPickerSelectButton: 'Use Selected Folder & Auto-Overwrite',
+    folderPickerOpenNativeFilesButton: 'Open Phone Files App',
+    folderPickerShareToFilesButton: 'Save to Phone Folder (Files App)',
   },
   ar: {
     appName: 'متتبع المهام',
@@ -830,6 +846,14 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     folderNameInputPlaceholder: 'اسم مجلد الحفظ المحلي (مثال: Documents/TaskTracker)...',
     localFolderConnectedSuccess: 'تم ربط مجلد الحفظ المحلي! سيتم تحديث نفس الملف masar_workspace_autosave.json تلقائياً دون تكرار.',
     localFolderOverwrittenSuccess: 'تم حفظ التعديلات والكتابة فوق الملف القديم بنجاح دون استهلاك مساحة إضافية.',
+    folderPickerModalTitle: 'اختيار مجلد الحفظ على الهاتف أو الجهاز',
+    folderPickerModalSubtitle: 'اختر مجلداً من ذاكرة الهاتف أو الجهاز ليتم تحديث الملف masar_workspace_autosave.json داخله تلقائياً وبنفس الاسم دون تكرار.',
+    folderPickerDeviceFoldersHeading: 'مجلدات الهاتف والجهاز المتاحة',
+    folderPickerCreateNewLabel: 'أو إنشاء مجلد جديد على الجهاز',
+    folderPickerNewFolderPlaceholder: 'اسم المجلد الجديد (مثال: PhoneStorage/MyTasks)...',
+    folderPickerSelectButton: 'اعتماد هذا المجلد للحفظ التلقائي',
+    folderPickerOpenNativeFilesButton: 'فتح مدير ملفات الهاتف',
+    folderPickerShareToFilesButton: 'حفظ في مجلد بالهاتف (تطبيق الملفات)',
   },
   he: {
     appName: 'מעקב משימות Task Tracker',
@@ -1105,6 +1129,14 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     folderNameInputPlaceholder: 'שם תיקייה מקומית (למשל Documents/TaskTracker)...',
     localFolderConnectedSuccess: 'תיקיית השמירה המקומית חוברה! כל שינוי ידרוס את הקובץ masar_workspace_autosave.json.',
     localFolderOverwrittenSuccess: 'הקובץ masar_workspace_autosave.json עודכן ונדרס בהצלחה ללא כפילויות.',
+    folderPickerModalTitle: 'בחירת תיקיית שמירה במכשיר / בנייד',
+    folderPickerModalSubtitle: 'בחר תיקייה בטלפון, בטאבלט או במחשב שבה הקובץ masar_workspace_autosave.json יידרס ויתעדכן אוטומטית.',
+    folderPickerDeviceFoldersHeading: 'תיקיות אחסון במכשיר',
+    folderPickerCreateNewLabel: 'או צור תיקייה חדשה',
+    folderPickerNewFolderPlaceholder: 'שם תיקייה חדשה (למשל PhoneStorage/MyTasks)...',
+    folderPickerSelectButton: 'השתמש בתיקייה שנבחרה לשמירה אוטומטית',
+    folderPickerOpenNativeFilesButton: 'פתח סייר קבצים של הטלפון',
+    folderPickerShareToFilesButton: 'שמור בתיקייה בטלפון (אפליקציית הקבצים)',
   },
 };
 

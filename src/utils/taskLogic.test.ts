@@ -582,10 +582,14 @@ test('local folder auto-overwrite builds single-file payload for masar_workspace
   };
 
   const {
+    addCustomDeviceFolderOption,
     AUTOSAVE_FILENAME,
     buildLocalOverwritePayload,
+    connectSelectedDeviceFolder,
+    loadDeviceFolderOptions,
     loadLocalFolderMeta,
     saveLocalFolderMeta,
+    tryNativeDirectoryPickerFirst,
   } = await import('./localFolderSync.ts');
 
   assert.equal(AUTOSAVE_FILENAME, 'masar_workspace_autosave.json');
@@ -606,7 +610,39 @@ test('local folder auto-overwrite builds single-file payload for masar_workspace
   const built = buildLocalOverwritePayload(getDefaultWorkspaceState(), 'en', true);
   assert.equal(built.payload.overwrittenFile, 'masar_workspace_autosave.json');
   assert.equal(built.byteLength > 100, true);
+
+  // Mobile/Device folder picker options & custom folder creation
+  const initialFolders = loadDeviceFolderOptions();
+  assert.equal(initialFolders.length >= 5, true);
+
+  const customFolder = addCustomDeviceFolderOption('PhoneStorage/MyMobileTasks');
+  assert.equal(customFolder.path, 'PhoneStorage/MyMobileTasks');
+  const updatedFolders = loadDeviceFolderOptions();
+  assert.equal(
+    updatedFolders.some((f) => f.path === 'PhoneStorage/MyMobileTasks'),
+    true
+  );
+
+  // Without window.showDirectoryPicker (like on mobile), tryNativeDirectoryPickerFirst requests modal picker
+  const nativeCheck = await tryNativeDirectoryPickerFirst(
+    getDefaultWorkspaceState(),
+    'en',
+    true
+  );
+  assert.equal(nativeCheck.requiresModalPicker, true);
+
+  // Connecting a selected mobile folder updates meta and increments overwriteCount
+  const connectedMeta = await connectSelectedDeviceFolder(
+    getDefaultWorkspaceState(),
+    'en',
+    true,
+    'PhoneStorage/MyMobileTasks'
+  );
+  assert.equal(connectedMeta.isConnected, true);
+  assert.equal(connectedMeta.folderName, 'PhoneStorage/MyMobileTasks');
+  assert.equal(connectedMeta.fileName, 'masar_workspace_autosave.json');
 });
+
 
 
 

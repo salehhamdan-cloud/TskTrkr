@@ -13,8 +13,10 @@ import {
   Smartphone,
   Lock,
   KeyRound,
-  GitBranch,
   FolderOpen,
+  FolderPlus,
+  Share2,
+  X,
   Save,
   Unlink,
 } from 'lucide-react';
@@ -28,12 +30,17 @@ import {
   verifyAppPassword,
 } from '../utils/offlineStorage';
 import {
+  addCustomDeviceFolderOption,
   AUTOSAVE_FILENAME,
-  chooseAndConnectLocalFolder,
+  connectSelectedDeviceFolder,
+  DeviceFolderOption,
   disconnectLocalFolder,
+  loadDeviceFolderOptions,
   LocalFolderSyncMeta,
   overwriteLocalSaveFile,
   readFromConnectedLocalFolder,
+  shareOrSaveToMobileFilesApp,
+  tryNativeDirectoryPickerFirst,
 } from '../utils/localFolderSync';
 import { PWAInstallButton } from './PWAInstallButton';
 
@@ -69,6 +76,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onLockApp,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mobileNativeFolderFileRef = useRef<HTMLInputElement>(null);
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error';
     message: string;
@@ -183,28 +191,135 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const [customFolderNameInput, setCustomFolderNameInput] = useState(
-    localFolderMeta?.folderName || 'Documents/TaskTracker'
+    localFolderMeta?.folderName || 'Internal Storage/Documents/TaskTracker'
   );
   const [folderSyncFeedback, setFolderSyncFeedback] = useState<{
     type: 'success' | 'error';
     message: string;
   } | null>(null);
 
-  const handleChooseLocalFolder = async () => {
-    const res = await chooseAndConnectLocalFolder(
-      workspace,
-      lang,
-      darkMode,
-      customFolderNameInput
+  // Mobile & Device Folder Picker Modal state
+  const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
+  const [deviceFolders, setDeviceFolders] = useState<DeviceFolderOption[]>(() =>
+    loadDeviceFolderOptions()
+  );
+  const [selectedPickerFolderPath, setSelectedPickerFolderPath] = useState<string>(
+    localFolderMeta?.folderName || 'Internal Storage/Documents/TaskTracker'
+  );
+  const [newFolderInput, setNewFolderInput] = useState('');
+
+  const handleChooseLocalFolder = () => {
+    const latestOptions = loadDeviceFolderOptions();
+    setDeviceFolders(latestOptions);
+    setSelectedPickerFolderPath(
+      customFolderNameInput.trim() ||
+        localFolderMeta?.folderName ||
+        latestOptions[0]?.path ||
+        'Internal Storage/Documents/TaskTracker'
     );
-    if (res.success) {
-      onUpdateLocalFolderMeta?.(res.meta);
-      setCustomFolderNameInput(res.meta.folderName);
+    setIsFolderPickerOpen(true);
+  };
+
+  const handleBrowseNativeSystemDirectory = async () => {
+    const nativeRes = await tryNativeDirectoryPickerFirst(workspace, lang, darkMode);
+    if (nativeRes.connectedNatively && nativeRes.meta) {
+      onUpdateLocalFolderMeta?.(nativeRes.meta);
+      setCustomFolderNameInput(nativeRes.meta.folderName);
+      setSelectedPickerFolderPath(nativeRes.meta.folderName);
+      setIsFolderPickerOpen(false);
       setFolderSyncFeedback({
         type: 'success',
         message: t.localFolderConnectedSuccess,
       });
+      return;
     }
+    // If native directory picker is unavailable on mobile, trigger the phone's native file/folder input
+    mobileNativeFolderFileRef.current?.click();
+  };
+
+  const handleCreateNewDeviceFolder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFolderInput.trim()) return;
+    const created = addCustomDeviceFolderOption(newFolderInput.trim());
+    const updatedList = loadDeviceFolderOptions();
+    setDeviceFolders(updatedList);
+    setSelectedPickerFolderPath(created.path);
+    setCustomFolderNameInput(created.path);
+    setNewFolderInput('');
+  };
+
+  const handleConfirmModalFolderSelection = async () => {
+    const targetPath =
+      selectedPickerFolderPath.trim() ||
+      customFolderNameInput.trim() ||
+      'Internal Storage/Documents/TaskTracker';
+    const nextMeta = await connectSelectedDeviceFolder(
+      workspace,
+      lang,
+      darkMode,
+      targetPath
+    );
+    onUpdateLocalFolderMeta?.(nextMeta);
+    setCustomFolderNameInput(nextMeta.folderName);
+    setIsFolderPickerOpen(false);
+    setFolderSyncFeedback({
+      type: 'success',
+      message: t.localFolderConnectedSuccess,
+    });
+  };
+
+  const handleNativeMobileFileOrFolderChosen = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Extract folder name from webkitRelativePath if available, or build a mobile folder path
+    const relPath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+    const inferredFolder =
+      relPath && relPath.includes('/')
+        ? `PhoneStorage/${relPath.split('/').slice(0, -1).join('/')}`
+        : `PhoneStorage/Documents/${file.name.replace(/\.json$/i, '')}`;
+
+    const createdOption = addCustomDeviceFolderOption(inferredFolder);
+    setDeviceFolders(loadDeviceFolderOptions());
+    setSelectedPickerFolderPath(createdOption.path);
+    setCustomFolderNameInput(createdOption.path);
+
+    const nextMeta = await connectSelectedDeviceFolder(
+      workspace,
+      lang,
+      darkMode,
+      createdOption.path
+    );
+    onUpdateLocalFolderMeta?.(nextMeta);
+    setIsFolderPickerOpen(false);
+    setFolderSyncFeedback({
+      type: 'success',
+      message: t.localFolderConnectedSuccess,
+    });
+    e.target.value = '';
+  };
+
+  const handleShareOrSaveToMobileFiles = async () => {
+    const targetPath =
+      selectedPickerFolderPath.trim() ||
+      customFolderNameInput.trim() ||
+      localFolderMeta?.folderName ||
+      'Internal Storage/Documents/TaskTracker';
+    const nextMeta = await shareOrSaveToMobileFilesApp(
+      workspace,
+      lang,
+      darkMode,
+      targetPath
+    );
+    onUpdateLocalFolderMeta?.(nextMeta);
+    setCustomFolderNameInput(nextMeta.folderName);
+    setIsFolderPickerOpen(false);
+    setFolderSyncFeedback({
+      type: 'success',
+      message: t.localFolderOverwrittenSuccess,
+    });
   };
 
   const handleOverwriteNow = async () => {
@@ -496,6 +611,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
         </div>
 
+        {/* Hidden native file/folder input for mobile OS Files app integration */}
+        <input
+          ref={mobileNativeFolderFileRef}
+          type="file"
+          accept=".json,application/json"
+          onChange={handleNativeMobileFileOrFolderChosen}
+          className="hidden"
+        />
+
         {/* Folder Name Input + Choose Folder CTA */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
           <input
@@ -504,21 +628,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             value={customFolderNameInput}
             onChange={(e) => setCustomFolderNameInput(e.target.value)}
             placeholder={t.folderNameInputPlaceholder}
-            className="flex-1 h-9 px-3 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+            className="w-full sm:flex-1 h-10 sm:h-9 px-3 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
           />
-          <button
-            type="button"
-            data-testid="choose-save-folder-btn"
-            onClick={handleChooseLocalFolder}
-            className="h-9 px-4 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0"
-          >
-            <FolderOpen className="w-3.5 h-3.5" />
-            <span>
-              {localFolderMeta?.isConnected
-                ? t.changeSaveFolderButton
-                : t.chooseSaveFolderButton}
-            </span>
-          </button>
+          <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2">
+            <button
+              type="button"
+              data-testid="choose-save-folder-btn"
+              onClick={handleChooseLocalFolder}
+              className="w-full sm:w-auto min-h-9 py-2 px-4 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0"
+            >
+              <FolderOpen className="w-3.5 h-3.5 shrink-0" />
+              <span>
+                {localFolderMeta?.isConnected
+                  ? t.changeSaveFolderButton
+                  : t.chooseSaveFolderButton}
+              </span>
+            </button>
+            <button
+              type="button"
+              data-testid="save-to-mobile-files-inline-btn"
+              onClick={handleShareOrSaveToMobileFiles}
+              className="w-full sm:w-auto min-h-9 py-2 px-3.5 rounded-lg text-xs font-semibold border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0"
+            >
+              <Share2 className="w-3.5 h-3.5 shrink-0" />
+              <span>{t.folderPickerShareToFilesButton}</span>
+            </button>
+          </div>
         </div>
 
         {/* Connected Folder Telemetry Grid */}
@@ -528,7 +663,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span className="block text-[10px] font-mono uppercase tracking-wider text-slate-400">
                 {t.connectedFolderLabel}
               </span>
-              <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate block mt-0.5">
+              <span
+                data-testid="connected-folder-name-display"
+                className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate block mt-0.5"
+              >
                 {localFolderMeta.folderName}
               </span>
             </div>
@@ -605,6 +743,161 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </button>
           </div>
         )}
+
+        {/* Interactive Mobile & Device Folder Picker Modal */}
+        {isFolderPickerOpen && (
+          <div
+            data-testid="mobile-folder-picker-modal"
+            className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
+          >
+            <div className="w-full max-w-lg max-h-[90dvh] flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+              {/* Modal Header */}
+              <div className="px-4 py-3.5 sm:px-5 sm:py-4 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0 mt-0.5">
+                    <FolderOpen className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                      {t.folderPickerModalTitle}
+                    </h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      {t.folderPickerModalSubtitle}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  data-testid="close-folder-picker-modal-btn"
+                  onClick={() => setIsFolderPickerOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Scrollable Folder Browser Body */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+                {/* Native Mobile Files App Quick Actions */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    data-testid="open-native-mobile-files-btn"
+                    onClick={handleBrowseNativeSystemDirectory}
+                    className="h-9 px-3 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span className="truncate">{t.folderPickerOpenNativeFilesButton}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="save-to-mobile-files-btn"
+                    onClick={handleShareOrSaveToMobileFiles}
+                    className="h-9 px-3 rounded-lg text-xs font-semibold border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Share2 className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{t.folderPickerShareToFilesButton}</span>
+                  </button>
+                </div>
+
+                {/* Device Storage Folders List */}
+                <div className="space-y-2">
+                  <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                    {t.folderPickerDeviceFoldersHeading}
+                  </div>
+                  <div className="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
+                    {deviceFolders.map((folder) => {
+                      const isSelected = selectedPickerFolderPath === folder.path;
+                      return (
+                        <button
+                          key={folder.id}
+                          type="button"
+                          data-testid={`device-folder-option-${folder.id}`}
+                          onClick={() => {
+                            setSelectedPickerFolderPath(folder.path);
+                            setCustomFolderNameInput(folder.path);
+                          }}
+                          className={`w-full flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl border text-left rtl:text-right transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-600 dark:border-blue-500 text-blue-700 dark:text-blue-300'
+                              : 'bg-slate-50/70 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <FolderOpen
+                              className={`w-4 h-4 shrink-0 ${
+                                isSelected
+                                  ? 'text-blue-600 dark:text-blue-400'
+                                  : 'text-slate-400'
+                              }`}
+                            />
+                            <div className="min-w-0">
+                              <div className="text-xs font-semibold truncate">
+                                {folder.name}
+                              </div>
+                              <div className="text-[10px] font-mono text-slate-400 truncate">
+                                {folder.path}/{AUTOSAVE_FILENAME}
+                              </div>
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Create New Device Folder */}
+                <form onSubmit={handleCreateNewDeviceFolder} className="space-y-1.5 pt-1">
+                  <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                    {t.folderPickerCreateNewLabel}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      data-testid="new-device-folder-input"
+                      value={newFolderInput}
+                      onChange={(e) => setNewFolderInput(e.target.value)}
+                      placeholder={t.folderPickerNewFolderPlaceholder}
+                      className="flex-1 min-w-0 h-9 px-3 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                    />
+                    <button
+                      type="submit"
+                      data-testid="create-device-folder-btn"
+                      className="h-9 px-3 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 inline-flex items-center gap-1.5 shrink-0 cursor-pointer"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      <span>{t.create}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFolderPickerOpen(false)}
+                  className="h-9 px-3.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  type="button"
+                  data-testid="confirm-folder-picker-btn"
+                  onClick={handleConfirmModalFolderSelection}
+                  className="h-9 px-4 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>{t.folderPickerSelectButton}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Section 4: Install App (Mobile, Tablet & PC) */}
@@ -626,53 +919,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <PWAInstallButton t={t} variant="card" />
       </section>
 
-      {/* Section 5: Private Personal Use & Publishing Guide */}
-      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 sm:p-6 shadow-xs space-y-4">
-        <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/60 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
-            <Lock className="w-4.5 h-4.5" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-              {t.privatePublishTitle}
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-              {t.privatePublishDesc}
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
-          <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
-            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-              {t.privateStep1Title}
-            </h3>
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              {t.privateStep1Desc}
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
-            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-              {t.privateStep2Title}
-            </h3>
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              {t.privateStep2Desc}
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
-            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-              {t.privateStep3Title}
-            </h3>
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              {t.privateStep3Desc}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Section 6: App Password & Entry Lock Security */}
+      {/* Section 5: App Password & Entry Lock Security */}
       <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 sm:p-6 shadow-xs space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-3">
@@ -767,59 +1014,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </form>
       </section>
-
-      {/* Section 7: GitHub Pages Publishing & Automatic Sync */}
-      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 sm:p-6 shadow-xs space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
-              <GitBranch className="w-4.5 h-4.5" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                {t.ghPagesTitle}
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                {t.ghPagesDesc}
-              </p>
-            </div>
-          </div>
-
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300">
-            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-            {t.ghPagesReadyBadge}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
-          <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
-            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-              {t.ghPagesStep1Title}
-            </h3>
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              {t.ghPagesStep1Desc}
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
-            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-              {t.ghPagesStep2Title}
-            </h3>
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              {t.ghPagesStep2Desc}
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
-            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-              {t.ghPagesStep3Title}
-            </h3>
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              {t.ghPagesStep3Desc}
-            </p>
-          </div>
-        </div>
-      </section>
     </div>
   );
 };
+
