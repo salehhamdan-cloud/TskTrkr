@@ -300,6 +300,39 @@ export interface TranslationDictionary {
   noBackupFoundNoJsonError: string;
   previewFileButton: string;
   filePreviewModalTitle: string;
+  // Move Tasks & Groups
+  moveTaskButton: string;
+  moveGroupButton: string;
+  moveTaskModalTitle: string;
+  moveGroupModalTitle: string;
+  moveSelectDestinationGroup: string;
+  moveSelectDestinationFolder: string;
+  currentLocationBadge: string;
+  tasksWillMoveNote: string;
+  confirmMoveButton: string;
+  notifMovedLabel: string;
+  // Google Drive Cloud Folder Backup
+  googleDriveBackupTitle: string;
+  googleDriveBackupDesc: string;
+  signInWithGoogleButton: string;
+  signOutGoogleButton: string;
+  signedInAsLabel: string;
+  chooseDriveFolderButton: string;
+  driveFolderModalTitle: string;
+  driveFolderModalSubtitle: string;
+  myDriveRootLabel: string;
+  driveSearchPlaceholder: string;
+  createDriveFolderPlaceholder: string;
+  backupToDriveNowButton: string;
+  loadFromDriveButton: string;
+  driveConnectedBadge: string;
+  confirmDriveUploadTitle: string;
+  confirmDriveUploadOverwriteDesc: string;
+  confirmDriveUploadCreateDesc: string;
+  confirmDriveUploadButton: string;
+  driveBackupSavedSuccess: string;
+  driveAuthExpiredError: string;
+  driveNoFoldersFound: string;
 }
 
 export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
@@ -599,6 +632,37 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     noBackupFoundNoJsonError: 'No valid Task Tracker JSON backup file was found in the selected files.',
     previewFileButton: 'Preview',
     filePreviewModalTitle: 'File Preview',
+    moveTaskButton: 'Move Task',
+    moveGroupButton: 'Move Group',
+    moveTaskModalTitle: 'Move Task to Another Group',
+    moveGroupModalTitle: 'Move Group to Another Folder',
+    moveSelectDestinationGroup: 'Select Destination Project / Group',
+    moveSelectDestinationFolder: 'Select Destination Folder',
+    currentLocationBadge: 'Current',
+    tasksWillMoveNote: 'All {count} task(s) inside this group will move with it automatically.',
+    confirmMoveButton: 'Move Here',
+    notifMovedLabel: 'Moved',
+    googleDriveBackupTitle: 'Google Drive Folder Backup (Phone & PC)',
+    googleDriveBackupDesc: 'Back up and sync masar_workspace_autosave.json directly to any Google Drive folder on your phone or PC, overwriting the single backup file to save storage.',
+    signInWithGoogleButton: 'Sign in with Google',
+    signOutGoogleButton: 'Sign Out',
+    signedInAsLabel: 'Google Account',
+    chooseDriveFolderButton: 'Choose Google Drive Folder',
+    driveFolderModalTitle: 'Browse Google Drive Folders',
+    driveFolderModalSubtitle: 'Open or create any folder in your Google Drive. Selected folders are scanned automatically for existing backups.',
+    myDriveRootLabel: 'My Drive',
+    driveSearchPlaceholder: 'Search Google Drive folders...',
+    createDriveFolderPlaceholder: 'New Drive folder name...',
+    backupToDriveNowButton: 'Back Up to Google Drive',
+    loadFromDriveButton: 'Scan & Load from Drive',
+    driveConnectedBadge: 'Google Drive Linked',
+    confirmDriveUploadTitle: 'Confirm Google Drive Backup Upload',
+    confirmDriveUploadOverwriteDesc: 'An existing backup file was found in this Google Drive folder. Confirm to overwrite masar_workspace_autosave.json with your current workspace.',
+    confirmDriveUploadCreateDesc: 'Confirm creating and uploading masar_workspace_autosave.json inside the selected Google Drive folder.',
+    confirmDriveUploadButton: 'Confirm Upload to Drive',
+    driveBackupSavedSuccess: 'Workspace backup saved to your Google Drive folder successfully.',
+    driveAuthExpiredError: 'Google Drive session expired. Please sign in with Google again.',
+    driveNoFoldersFound: 'No subfolders found in this Google Drive location.',
   },
   ar: {
     appName: 'متتبع المهام',
@@ -896,6 +960,37 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     noBackupFoundNoJsonError: 'لم يتم العثور على ملف نسخة احتياطية JSON صالح في الملفات المختارة.',
     previewFileButton: 'معاينة الملف',
     filePreviewModalTitle: 'معاينة الملف المرفق',
+    moveTaskButton: 'نقل المهمة',
+    moveGroupButton: 'نقل المجموعة',
+    moveTaskModalTitle: 'نقل المهمة إلى مجموعة أخرى',
+    moveGroupModalTitle: 'نقل المجموعة / المشروع إلى مجلد آخر',
+    moveSelectDestinationGroup: 'اختر المجموعة / المشروع الوجهة',
+    moveSelectDestinationFolder: 'اختر المجلد الوجهة',
+    currentLocationBadge: 'الحالي',
+    tasksWillMoveNote: 'ستنتقل جميع المهام ({count}) داخل هذه المجموعة تلقائياً معها.',
+    confirmMoveButton: 'نقل إلى هنا',
+    notifMovedLabel: 'تم النقل',
+    googleDriveBackupTitle: 'النسخ الاحتياطي إلى مجلد Google Drive (للهاتف والكمبيوتر)',
+    googleDriveBackupDesc: 'احفظ ملف النسخة الاحتياطية masar_workspace_autosave.json مباشرة في أي مجلد على Google Drive من هاتفك أو الكمبيوتر مع الكتابة فوق نفس الملف لتوفير المساحة.',
+    signInWithGoogleButton: 'تسجيل الدخول باستخدام Google',
+    signOutGoogleButton: 'تسجيل الخروج',
+    signedInAsLabel: 'حساب Google',
+    chooseDriveFolderButton: 'اختيار مجلد في Google Drive',
+    driveFolderModalTitle: 'تصفح مجلدات Google Drive',
+    driveFolderModalSubtitle: 'افتح أو أنشئ أي مجلد في Google Drive. يتم فحص المجلد المختار تلقائياً للبحث عن نسخ احتياطية سابقة.',
+    myDriveRootLabel: 'ملفاتي (My Drive)',
+    driveSearchPlaceholder: 'ابحث في مجلدات Google Drive...',
+    createDriveFolderPlaceholder: 'اسم مجلد جديد في Drive...',
+    backupToDriveNowButton: 'نسخ احتياطي إلى Google Drive',
+    loadFromDriveButton: 'فحص وتحميل من Drive',
+    driveConnectedBadge: 'مربوط مع Google Drive',
+    confirmDriveUploadTitle: 'تأكيد الرفع إلى Google Drive',
+    confirmDriveUploadOverwriteDesc: 'يوجد ملف نسخة احتياطية بالفعل في مجلد Google Drive هذا. هل تؤكد الكتابة فوق masar_workspace_autosave.json بالبيانات الحالية؟',
+    confirmDriveUploadCreateDesc: 'هل تؤكد إنشاء ورفع ملف masar_workspace_autosave.json داخل مجلد Google Drive المحدد؟',
+    confirmDriveUploadButton: 'تأكيد الرفع إلى Drive',
+    driveBackupSavedSuccess: 'تم حفظ النسخة الاحتياطية في مجلد Google Drive بنجاح.',
+    driveAuthExpiredError: 'انتهت جلسة Google Drive. يرجى تسجيل الدخول بحساب Google مرة أخرى.',
+    driveNoFoldersFound: 'لا توجد مجلدات فرعية في هذا الموقع داخل Google Drive.',
   },
   he: {
     appName: 'מעקב משימות Task Tracker',
@@ -1193,6 +1288,37 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     noBackupFoundNoJsonError: 'לא נמצא קובץ גיבוי JSON תקין בקבצים שנבחרו.',
     previewFileButton: 'תצוגה מקדימה',
     filePreviewModalTitle: 'תצוגה מקדימה של קובץ',
+    moveTaskButton: 'העבר משימה',
+    moveGroupButton: 'העבר קבוצה',
+    moveTaskModalTitle: 'העברת משימה לקבוצה אחרת',
+    moveGroupModalTitle: 'העברת קבוצה / פרויקט לתיקייה אחרת',
+    moveSelectDestinationGroup: 'בחר קבוצה / פרויקט יעד',
+    moveSelectDestinationFolder: 'בחר תיקיית יעד',
+    currentLocationBadge: 'נוכחי',
+    tasksWillMoveNote: 'כל {count} המשימות בתוך קבוצה זו יעברו איתה אוטומטית.',
+    confirmMoveButton: 'העבר לכאן',
+    notifMovedLabel: 'הועבר',
+    googleDriveBackupTitle: 'גיבוי לתיקיית Google Drive (טלפון ומחשב)',
+    googleDriveBackupDesc: 'גבה וסנכרן את הקובץ masar_workspace_autosave.json ישירות לכל תיקייה ב-Google Drive מהטלפון או מהמחשב תוך דריסת הקובץ הקיים לחיסכון במקום.',
+    signInWithGoogleButton: 'כניסה באמצעות Google',
+    signOutGoogleButton: 'התנתק',
+    signedInAsLabel: 'חשבון Google',
+    chooseDriveFolderButton: 'בחר תיקייה ב-Google Drive',
+    driveFolderModalTitle: 'דפדוף בתיקיות Google Drive',
+    driveFolderModalSubtitle: 'פתח או צור כל תיקייה ב-Google Drive. תיקיות נבחרות נסרקות אוטומטית לאיתור גיבויים קיימים.',
+    myDriveRootLabel: 'האחסון שלי (My Drive)',
+    driveSearchPlaceholder: 'חפש תיקיות ב-Google Drive...',
+    createDriveFolderPlaceholder: 'שם תיקייה חדשה ב-Drive...',
+    backupToDriveNowButton: 'גבה אל Google Drive',
+    loadFromDriveButton: 'סרוק וטען מ-Drive',
+    driveConnectedBadge: 'מחובר ל-Google Drive',
+    confirmDriveUploadTitle: 'אישור העלאת גיבוי ל-Google Drive',
+    confirmDriveUploadOverwriteDesc: 'נמצא קובץ גיבוי קיים בתיקיית Google Drive זו. אשר כדי לדרוס את masar_workspace_autosave.json בנתונים הנוכחיים.',
+    confirmDriveUploadCreateDesc: 'אשר יצירה והעלאה של masar_workspace_autosave.json בתוך תיקיית Google Drive שנבחרה.',
+    confirmDriveUploadButton: 'אשר העלאה ל-Drive',
+    driveBackupSavedSuccess: 'הגיבוי נשמר בהצלחה בתיקיית Google Drive שלך.',
+    driveAuthExpiredError: 'החיבור ל-Google Drive פג תוקף. אנא התחבר שוב עם Google.',
+    driveNoFoldersFound: 'לא נמצאו תיקיות משנה במיקום זה ב-Google Drive.',
   },
 };
 

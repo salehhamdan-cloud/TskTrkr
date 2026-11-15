@@ -785,8 +785,72 @@ test('parseBackupPayload, scanFileListForBackup, and scanDirectoryHandleForBacku
   assert.equal(dirScan.backup?.workspace.folders[0].name, 'Restored Folder');
 });
 
+test('moveTaskToGroup and moveProjectToFolder move tasks and cascade group folderId cleanly', async () => {
+  const { moveTaskToGroup, moveProjectToFolder } = await import('./taskLogic.ts');
 
+  const initial: WorkspaceState = {
+    folders: [
+      { id: 'fld-a', name: 'Engineering', createdAt: '2026-11-01T00:00:00Z' },
+      { id: 'fld-b', name: 'Operations', createdAt: '2026-11-01T00:00:00Z' },
+    ],
+    projects: [
+      {
+        id: 'prj-a1',
+        folderId: 'fld-a',
+        name: 'Mobile Core',
+        description: '',
+        createdAt: '2026-11-01T00:00:00Z',
+      },
+      {
+        id: 'prj-b1',
+        folderId: 'fld-b',
+        name: 'Field Logistics',
+        description: '',
+        createdAt: '2026-11-01T00:00:00Z',
+      },
+    ],
+    tasks: [
+      makeMockTask({
+        id: 'tsk-1',
+        folderId: 'fld-a',
+        projectId: 'prj-a1',
+        project: 'Mobile Core',
+        title: 'Task One',
+      }),
+      makeMockTask({
+        id: 'tsk-2',
+        folderId: 'fld-a',
+        projectId: 'prj-a1',
+        project: 'Mobile Core',
+        title: 'Task Two',
+      }),
+    ],
+    trash: [],
+    notifications: [],
+  };
 
+  // 1. Move tsk-1 from prj-a1 (fld-a) to prj-b1 (fld-b)
+  const afterTaskMove = moveTaskToGroup(initial, 'tsk-1', 'prj-b1', '2026-11-16T08:00:00Z');
+  const movedTask = afterTaskMove.tasks.find((t) => t.id === 'tsk-1')!;
+  const untouchedTask = afterTaskMove.tasks.find((t) => t.id === 'tsk-2')!;
+  assert.equal(movedTask.projectId, 'prj-b1');
+  assert.equal(movedTask.folderId, 'fld-b');
+  assert.equal(movedTask.project, 'Field Logistics');
+  assert.equal(movedTask.updatedAt, '2026-11-16T08:00:00Z');
+  assert.equal(untouchedTask.projectId, 'prj-a1');
+  assert.equal(untouchedTask.folderId, 'fld-a');
 
+  // 2. Move prj-a1 from fld-a to fld-b -> cascades folderId update to tsk-2
+  const afterGroupMove = moveProjectToFolder(afterTaskMove, 'prj-a1', 'fld-b', '2026-11-16T09:00:00Z');
+  const movedGroup = afterGroupMove.projects.find((p) => p.id === 'prj-a1')!;
+  const cascadedTask = afterGroupMove.tasks.find((t) => t.id === 'tsk-2')!;
+  assert.equal(movedGroup.folderId, 'fld-b');
+  assert.equal(cascadedTask.folderId, 'fld-b');
+  assert.equal(cascadedTask.projectId, 'prj-a1');
 
-
+  // 3. No-op when moving to same destination or unknown IDs
+  assert.equal(moveTaskToGroup(afterGroupMove, 'tsk-1', 'prj-b1'), afterGroupMove);
+  assert.equal(moveProjectToFolder(afterGroupMove, 'prj-a1', 'fld-b'), afterGroupMove);
+  assert.equal(moveTaskToGroup(afterGroupMove, 'missing', 'prj-b1'), afterGroupMove);
+  assert.equal(moveProjectToFolder(afterGroupMove, 'prj-a1', 'missing'), afterGroupMove);
+});

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   ArrowLeft,
+  ArrowRightLeft,
   ArrowUpDown,
   Calendar,
   Check,
@@ -50,6 +51,8 @@ interface ProjectDetailViewProps {
   onUpdateProject: (projectId: string, patch: { name?: string; description?: string }) => void;
   onDeleteProject: (projectId: string) => void;
   onOpenNewTaskModal: () => void;
+  onMoveProject?: (projectId: string) => void;
+  onMoveTask?: (taskId: string) => void;
   onUpdateTaskMeta: (
     taskId: string,
     patch: Partial<Pick<TaskItem, 'title' | 'description' | 'status' | 'priority' | 'dueDate'>>
@@ -67,6 +70,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   onUpdateProject,
   onDeleteProject,
   onOpenNewTaskModal,
+  onMoveProject,
+  onMoveTask,
   onUpdateTaskMeta,
   onDeleteTask,
 }) => {
@@ -364,6 +369,18 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 <FileDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                 <span>{t.exportPdfButton}</span>
               </button>
+              {onMoveProject && (
+                <button
+                  type="button"
+                  data-testid="move-project-header-btn"
+                  onClick={() => onMoveProject(project.id)}
+                  aria-label={t.moveGroupButton}
+                  className="h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ArrowRightLeft className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>{t.moveGroupButton}</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -780,6 +797,18 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
+                        {onMoveTask && (
+                          <button
+                            type="button"
+                            data-testid={`move-task-btn-${task.id}`}
+                            onClick={() => onMoveTask(task.id)}
+                            title={t.moveTaskButton}
+                            aria-label={`${t.moveTaskButton} ${taskTitle}`}
+                            className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                          >
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {

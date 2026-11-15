@@ -51,8 +51,10 @@ import {
   markNotificationRead,
   moveAttachmentToTrash,
   moveFolderToTrash,
+  moveProjectToFolder,
   moveProjectToTrash,
   moveSubTodoToTrash,
+  moveTaskToGroup,
   moveTaskToTrash,
   moveTodoToTrash,
   moveUpdateToTrash,
@@ -93,6 +95,7 @@ import { AppLockScreen } from './components/AppLockScreen';
 import { ConfirmDeleteModal, ConfirmDeleteState } from './components/ConfirmDeleteModal';
 import { TrashView } from './components/TrashView';
 import { NotificationCenter } from './components/NotificationCenter';
+import { MoveItemModal, MoveModalTarget } from './components/MoveItemModal';
 
 export default function App() {
   const [lang, setLangState] = useState<LanguageCode>(() => loadSavedLanguage());
@@ -137,6 +140,9 @@ export default function App() {
   // Confirmation modal state for all deletions across the app
   const [confirmDeleteState, setConfirmDeleteState] =
     useState<ConfirmDeleteState | null>(null);
+
+  // Move Task / Group modal state
+  const [moveModalTarget, setMoveModalTarget] = useState<MoveModalTarget>(null);
 
   // Live toast notification banner state
   const [liveToast, setLiveToast] = useState<{
@@ -564,6 +570,67 @@ export default function App() {
           }
         }
       },
+    });
+  };
+
+  // ============================================================================
+  // MOVE TASKS & GROUPS BETWEEN PROJECTS / FOLDERS
+  // ============================================================================
+  const handleConfirmMoveTask = (taskId: string, targetProjectId: string) => {
+    const task = workspace.tasks.find((tsk) => tsk.id === taskId);
+    const destProject = workspace.projects.find((p) => p.id === targetProjectId);
+    if (!task || !destProject) return;
+
+    const taskLabel = resolveLocalizedText(task.title, task.localizedTitle, lang);
+    const destLabel = resolveLocalizedText(
+      destProject.name,
+      destProject.localizedName,
+      lang
+    );
+
+    commitWorkspace((prev) => {
+      const next = moveTaskToGroup(prev, taskId, targetProjectId);
+      showToast(
+        `${t.notifMovedLabel}: ${t.taskTypeLabel}`,
+        `${taskLabel} → ${destLabel}`,
+        { type: 'task', id: taskId }
+      );
+      return appendNotification(next, {
+        category: 'change',
+        section: 'task',
+        title: `${t.notifMovedLabel}: ${t.taskTypeLabel}`,
+        message: `${taskLabel} → ${destLabel}`,
+        targetNode: { type: 'task', id: taskId },
+      });
+    });
+  };
+
+  const handleConfirmMoveProject = (projectId: string, targetFolderId: string) => {
+    const proj = workspace.projects.find((p) => p.id === projectId);
+    const destFolder = workspace.folders.find((f) => f.id === targetFolderId);
+    if (!proj || !destFolder) return;
+
+    const projLabel = resolveLocalizedText(proj.name, proj.localizedName, lang);
+    const destLabel = resolveLocalizedText(
+      destFolder.name,
+      destFolder.localizedName,
+      lang
+    );
+
+    commitWorkspace((prev) => {
+      const next = moveProjectToFolder(prev, projectId, targetFolderId);
+      showToast(
+        `${t.notifMovedLabel}: ${t.projectTypeLabel}`,
+        `${projLabel} → ${destLabel}`,
+        { type: 'project', id: projectId }
+      );
+      return appendNotification(next, {
+        category: 'change',
+        section: 'project',
+        title: `${t.notifMovedLabel}: ${t.projectTypeLabel}`,
+        message: `${projLabel} → ${destLabel}`,
+        targetNode: { type: 'project', id: projectId },
+      });
     });
   };
 
@@ -1392,6 +1459,12 @@ export default function App() {
               onOpenNewTaskForProject={(folderId, projectId) =>
                 setNewTaskContext({ isOpen: true, folderId, projectId })
               }
+              onMoveProject={(projectId) =>
+                setMoveModalTarget({ type: 'project', projectId })
+              }
+              onMoveTask={(taskId) =>
+                setMoveModalTarget({ type: 'task', taskId })
+              }
               onDeleteTask={handleDeleteTask}
             />
           </div>
@@ -1438,6 +1511,14 @@ export default function App() {
                   onOpenNewTaskForProject={(folderId, projectId) => {
                     setIsMobileSidebarOpen(false);
                     setNewTaskContext({ isOpen: true, folderId, projectId });
+                  }}
+                  onMoveProject={(projectId) => {
+                    setIsMobileSidebarOpen(false);
+                    setMoveModalTarget({ type: 'project', projectId });
+                  }}
+                  onMoveTask={(taskId) => {
+                    setIsMobileSidebarOpen(false);
+                    setMoveModalTarget({ type: 'task', taskId });
                   }}
                   onDeleteTask={handleDeleteTask}
                 />
@@ -1527,6 +1608,9 @@ export default function App() {
               onDeleteFolder={handleDeleteFolder}
               onCreateProject={handleCreateProject}
               onUpdateProject={handleUpdateProject}
+              onMoveProject={(projectId) =>
+                setMoveModalTarget({ type: 'project', projectId })
+              }
               onDeleteProject={handleDeleteProject}
             />
           )}
@@ -1551,6 +1635,12 @@ export default function App() {
                   folderId: activeProject.folderId,
                   projectId: activeProject.id,
                 })
+              }
+              onMoveProject={(projectId) =>
+                setMoveModalTarget({ type: 'project', projectId })
+              }
+              onMoveTask={(taskId) =>
+                setMoveModalTarget({ type: 'task', taskId })
               }
               onUpdateTaskMeta={handleUpdateTaskMeta}
               onDeleteTask={handleDeleteTask}
@@ -1594,6 +1684,9 @@ export default function App() {
               onDeleteAttachment={handleDeleteAttachment}
               onAnnotatePhoto={handleAnnotatePhoto}
               onUpdateTaskMeta={handleUpdateTaskMeta}
+              onMoveTask={(taskId) =>
+                setMoveModalTarget({ type: 'task', taskId })
+              }
               onDeleteTask={handleDeleteTask}
             />
           )}
@@ -1744,6 +1837,19 @@ export default function App() {
         t={t}
         onClose={() => setNewTaskContext({ isOpen: false })}
         onCreateTask={handleCreateTask}
+      />
+
+      {/* Move Task / Group Modal */}
+      <MoveItemModal
+        target={moveModalTarget}
+        folders={workspace.folders}
+        projects={workspace.projects}
+        tasks={workspace.tasks}
+        lang={lang}
+        t={t}
+        onClose={() => setMoveModalTarget(null)}
+        onConfirmMoveTask={handleConfirmMoveTask}
+        onConfirmMoveProject={handleConfirmMoveProject}
       />
 
       {/* Global Confirm Delete Modal for all app items */}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ArrowRightLeft,
   BarChart3,
   Bell,
   Check,
@@ -46,6 +47,8 @@ interface SidebarTreeProps {
   onUpdateProject: (projectId: string, patch: { name?: string; description?: string }) => void;
   onDeleteProject: (projectId: string) => void;
   onOpenNewTaskForProject: (folderId: string, projectId: string) => void;
+  onMoveProject?: (projectId: string) => void;
+  onMoveTask?: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
 }
 
@@ -67,6 +70,8 @@ export const SidebarTree: React.FC<SidebarTreeProps> = ({
   onUpdateProject,
   onDeleteProject,
   onOpenNewTaskForProject,
+  onMoveProject,
+  onMoveTask,
   onDeleteTask,
 }) => {
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>(() => {
@@ -525,7 +530,7 @@ export const SidebarTree: React.FC<SidebarTreeProps> = ({
                               </button>
                             </div>
 
-                            {/* Project Quick Actions: Add Task, Edit Project, Delete Project */}
+                            {/* Project Quick Actions: Add Task, Move Group, Edit Project, Delete Project */}
                             <div className="flex items-center gap-0.5 shrink-0">
                               <button
                                 type="button"
@@ -542,6 +547,22 @@ export const SidebarTree: React.FC<SidebarTreeProps> = ({
                               >
                                 <Plus className="w-3 h-3" />
                               </button>
+                              {onMoveProject && (
+                                <button
+                                  type="button"
+                                  data-testid={`sidebar-move-project-btn-${project.id}`}
+                                  onClick={() => onMoveProject(project.id)}
+                                  title={t.moveGroupButton}
+                                  aria-label={`${t.moveGroupButton} ${projectDisplayName}`}
+                                  className={`p-1 rounded cursor-pointer ${
+                                    isProjectSelected
+                                      ? 'text-blue-100 hover:text-white'
+                                      : 'text-slate-400 hover:text-blue-600 dark:hover:text-blue-400'
+                                  }`}
+                                >
+                                  <ArrowRightLeft className="w-3 h-3" />
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => {
@@ -617,6 +638,22 @@ export const SidebarTree: React.FC<SidebarTreeProps> = ({
                                     >
                                       {prog}%
                                     </span>
+                                    {onMoveTask && (
+                                      <button
+                                        type="button"
+                                        data-testid={`sidebar-move-task-btn-${tsk.id}`}
+                                        onClick={() => onMoveTask(tsk.id)}
+                                        title={t.moveTaskButton}
+                                        aria-label={`${t.moveTaskButton} ${taskDisplayTitle}`}
+                                        className={`p-1 rounded opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity cursor-pointer ${
+                                          isTaskSelected
+                                            ? 'text-blue-100 hover:text-white'
+                                            : 'text-slate-400 hover:text-blue-600 dark:hover:text-blue-400'
+                                        }`}
+                                      >
+                                        <ArrowRightLeft className="w-3 h-3" />
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={() => onDeleteTask(tsk.id)}

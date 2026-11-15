@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  ArrowRightLeft,
   ArrowUpDown,
   Check,
   Folder,
@@ -35,6 +36,7 @@ interface FolderDetailViewProps {
   onDeleteFolder: (folderId: string) => void;
   onCreateProject: (folderId: string, name: string, description: string) => void;
   onUpdateProject: (projectId: string, patch: { name?: string; description?: string }) => void;
+  onMoveProject?: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
 }
 
@@ -49,6 +51,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
   onDeleteFolder,
   onCreateProject,
   onUpdateProject,
+  onMoveProject,
   onDeleteProject,
 }) => {
   const folderDisplayName = resolveLocalizedText(
@@ -480,6 +483,18 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
                       </button>
 
                       <div className="flex items-center gap-1 shrink-0">
+                        {onMoveProject && (
+                          <button
+                            type="button"
+                            data-testid={`move-project-btn-${proj.id}`}
+                            onClick={() => onMoveProject(proj.id)}
+                            title={t.moveGroupButton}
+                            aria-label={`${t.moveGroupButton} ${projName}`}
+                            className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                          >
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {

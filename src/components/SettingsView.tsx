@@ -49,6 +49,7 @@ import {
   shareOrSaveToMobileFilesApp,
 } from '../utils/localFolderSync';
 import { PWAInstallButton } from './PWAInstallButton';
+import { GoogleDriveBackupSection } from './GoogleDriveBackupSection';
 
 interface SettingsViewProps {
   workspace: WorkspaceState;
@@ -1258,6 +1259,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         )}
       </section>
+
+      {/* Section 3C: Google Drive Folder Backup (Phone & PC) */}
+      <GoogleDriveBackupSection
+        workspace={workspace}
+        lang={lang}
+        t={t}
+        darkMode={darkMode}
+        onSelectLanguage={onSelectLanguage}
+        onToggleDarkMode={onToggleDarkMode}
+        onSetDarkMode={onSetDarkMode}
+        onRestoreWorkspace={onRestoreWorkspace}
+      />
 
       {/* Section 4: Install App (Mobile, Tablet & PC) */}
       <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 sm:p-6 shadow-xs space-y-4">

@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  ArrowRightLeft,
   ArrowUpDown,
   Calendar,
   Check,
@@ -125,6 +126,7 @@ interface TaskDetailPanelProps {
       >
     >
   ) => void;
+  onMoveTask?: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
 }
 
@@ -164,6 +166,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
   onDeleteAttachment,
   onAnnotatePhoto,
   onUpdateTaskMeta,
+  onMoveTask,
   onDeleteTask,
 }) => {
   const displayTitle = resolveLocalizedText(task.title, task.localizedTitle, lang);
@@ -679,6 +682,18 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                   <FileDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                   <span>{t.exportPdfButton}</span>
                 </button>
+                {onMoveTask && (
+                  <button
+                    type="button"
+                    data-testid="move-task-header-btn"
+                    onClick={() => onMoveTask(task.id)}
+                    aria-label={t.moveTaskButton}
+                    className="h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ArrowRightLeft className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span>{t.moveTaskButton}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {

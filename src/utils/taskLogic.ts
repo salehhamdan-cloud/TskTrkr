@@ -1782,4 +1782,76 @@ export function decodeDataUrlTextPreview(url: string, maxChars = 50000): string 
   }
 }
 
+/**
+ * Moves a single task from its current project/group to `targetProjectId`,
+ * automatically updating `projectId`, `folderId`, denormalized `project` name, and `updatedAt`.
+ */
+export function moveTaskToGroup(
+  state: WorkspaceState,
+  taskId: string,
+  targetProjectId: string,
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  const targetProject = state.projects.find((p) => p.id === targetProjectId);
+  const existingTask = state.tasks.find((t) => t.id === taskId);
+  if (!targetProject || !existingTask) return state;
+  if (
+    existingTask.projectId === targetProject.id &&
+    existingTask.folderId === targetProject.folderId
+  ) {
+    return state;
+  }
+
+  return {
+    ...state,
+    tasks: state.tasks.map((tsk) =>
+      tsk.id === taskId
+        ? {
+            ...tsk,
+            folderId: targetProject.folderId,
+            projectId: targetProject.id,
+            project: targetProject.name,
+            updatedAt: nowIso,
+          }
+        : tsk
+    ),
+  };
+}
+
+/**
+ * Moves a project/group from its current folder to `targetFolderId` and
+ * cascades the updated `folderId` to all child tasks belonging to that group.
+ */
+export function moveProjectToFolder(
+  state: WorkspaceState,
+  projectId: string,
+  targetFolderId: string,
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  const targetFolder = state.folders.find((f) => f.id === targetFolderId);
+  const existingProject = state.projects.find((p) => p.id === projectId);
+  if (!targetFolder || !existingProject) return state;
+  if (existingProject.folderId === targetFolder.id) return state;
+
+  return {
+    ...state,
+    projects: state.projects.map((proj) =>
+      proj.id === projectId
+        ? {
+            ...proj,
+            folderId: targetFolder.id,
+          }
+        : proj
+    ),
+    tasks: state.tasks.map((tsk) =>
+      tsk.projectId === projectId
+        ? {
+            ...tsk,
+            folderId: targetFolder.id,
+            updatedAt: nowIso,
+          }
+        : tsk
+    ),
+  };
+}
 
