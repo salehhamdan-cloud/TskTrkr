@@ -286,6 +286,18 @@ export interface TranslationDictionary {
   folderPickerSelectButton: string;
   folderPickerOpenNativeFilesButton: string;
   folderPickerShareToFilesButton: string;
+  folderPickerBrowseFolderButton: string;
+  folderPickerPickIphoneFilesButton: string;
+  scanningFolderLabel: string;
+  folderBackupDetectedBadge: string;
+  noBackupInFolderNote: string;
+  confirmLoadBackupTitle: string;
+  confirmLoadBackupWarning: string;
+  backupFileDetailsLabel: string;
+  backupDataSummaryLabel: string;
+  currentDataSummaryLabel: string;
+  confirmDeleteOldAndLoadButton: string;
+  noBackupFoundNoJsonError: string;
   previewFileButton: string;
   filePreviewModalTitle: string;
 }
@@ -573,6 +585,18 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     folderPickerSelectButton: 'Use Selected Folder & Auto-Overwrite',
     folderPickerOpenNativeFilesButton: 'Open Phone Files App',
     folderPickerShareToFilesButton: 'Save to Phone Folder (Files App)',
+    folderPickerBrowseFolderButton: 'Select Folder (iPhone / Device)',
+    folderPickerPickIphoneFilesButton: 'Pick from iPhone Files / iCloud',
+    scanningFolderLabel: 'Scanning folder for backup file...',
+    folderBackupDetectedBadge: 'Backup File Detected',
+    noBackupInFolderNote: 'No backup file in this folder yet — ready for auto-save.',
+    confirmLoadBackupTitle: 'Backup File Found in Folder',
+    confirmLoadBackupWarning: 'Loading this backup will permanently delete all current old data in the app (folders, projects, tasks, trash, and notifications) and replace it with the data from this backup.',
+    backupFileDetailsLabel: 'Detected Backup File',
+    backupDataSummaryLabel: 'New Data from Backup',
+    currentDataSummaryLabel: 'Old Data to Be Deleted',
+    confirmDeleteOldAndLoadButton: 'Confirm: Delete Old Data & Load Backup',
+    noBackupFoundNoJsonError: 'No valid Task Tracker JSON backup file was found in the selected files.',
     previewFileButton: 'Preview',
     filePreviewModalTitle: 'File Preview',
   },
@@ -858,6 +882,18 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     folderPickerSelectButton: 'اعتماد هذا المجلد للحفظ التلقائي',
     folderPickerOpenNativeFilesButton: 'فتح مدير ملفات الهاتف',
     folderPickerShareToFilesButton: 'حفظ في مجلد بالهاتف (تطبيق الملفات)',
+    folderPickerBrowseFolderButton: 'اختيار مجلد (iPhone / الجهاز)',
+    folderPickerPickIphoneFilesButton: 'اختيار من ملفات iPhone / iCloud',
+    scanningFolderLabel: 'جاري فحص المجلد للبحث عن نسخة احتياطية...',
+    folderBackupDetectedBadge: 'تم العثور على ملف نسخة احتياطية',
+    noBackupInFolderNote: 'لا توجد نسخة احتياطية في هذا المجلد بعد — جاهز للحفظ التلقائي.',
+    confirmLoadBackupTitle: 'تم العثور على نسخة احتياطية في المجلد',
+    confirmLoadBackupWarning: 'عند التأكيد، سيتم حذف جميع البيانات القديمة الحالية في التطبيق بالكامل (المجلدات والمشاريع والمهام وسلة المحذوفات والإشعارات) واستبدالها بالبيانات الجديدة من النسخة الاحتياطية.',
+    backupFileDetailsLabel: 'ملف النسخة الاحتياطية المكتشف',
+    backupDataSummaryLabel: 'البيانات الجديدة من النسخة الاحتياطية',
+    currentDataSummaryLabel: 'البيانات القديمة التي سيتم حذفها',
+    confirmDeleteOldAndLoadButton: 'تأكيد: حذف البيانات القديمة وتحميل النسخة',
+    noBackupFoundNoJsonError: 'لم يتم العثور على ملف نسخة احتياطية JSON صالح في الملفات المختارة.',
     previewFileButton: 'معاينة الملف',
     filePreviewModalTitle: 'معاينة الملف المرفق',
   },
@@ -1143,6 +1179,18 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     folderPickerSelectButton: 'השתמש בתיקייה שנבחרה לשמירה אוטומטית',
     folderPickerOpenNativeFilesButton: 'פתח סייר קבצים של הטלפון',
     folderPickerShareToFilesButton: 'שמור בתיקייה בטלפון (אפליקציית הקבצים)',
+    folderPickerBrowseFolderButton: 'בחר תיקייה (iPhone / מכשיר)',
+    folderPickerPickIphoneFilesButton: 'בחר מקבצי iPhone / iCloud',
+    scanningFolderLabel: 'סורק תיקייה לאיתור קובץ גיבוי...',
+    folderBackupDetectedBadge: 'נמצא קובץ גיבוי',
+    noBackupInFolderNote: 'אין עדיין קובץ גיבוי בתיקייה זו — מוכן לשמירה אוטומטית.',
+    confirmLoadBackupTitle: 'נמצא קובץ גיבוי בתיקייה',
+    confirmLoadBackupWarning: 'אישור פעולה זו ימחק את כל הנתונים הישנים הנוכחיים באפליקציה (תיקיות, פרויקטים, משימות, סל מיחזור והתראות) ויטען במקומם את הנתונים החדשים מהגיבוי.',
+    backupFileDetailsLabel: 'קובץ גיבוי שאותר',
+    backupDataSummaryLabel: 'נתונים חדשים מהגיבוי',
+    currentDataSummaryLabel: 'נתונים ישנים שיימחקו',
+    confirmDeleteOldAndLoadButton: 'אישור: מחק נתונים ישנים וטען גיבוי',
+    noBackupFoundNoJsonError: 'לא נמצא קובץ גיבוי JSON תקין בקבצים שנבחרו.',
     previewFileButton: 'תצוגה מקדימה',
     filePreviewModalTitle: 'תצוגה מקדימה של קובץ',
   },

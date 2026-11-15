@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Globe,
   Sun,
@@ -19,6 +19,9 @@ import {
   X,
   Save,
   Unlink,
+  AlertTriangle,
+  FileJson,
+  Loader2,
 } from 'lucide-react';
 import { LanguageCode, WorkspaceState } from '../types/task';
 import { TranslationDictionary } from '../i18n/translations';
@@ -32,15 +35,18 @@ import {
 import {
   addCustomDeviceFolderOption,
   AUTOSAVE_FILENAME,
-  connectSelectedDeviceFolder,
   DeviceFolderOption,
   disconnectLocalFolder,
+  finalizeFolderConnection,
   loadDeviceFolderOptions,
   LocalFolderSyncMeta,
+  openNativeDirectoryAndScan,
   overwriteLocalSaveFile,
   readFromConnectedLocalFolder,
+  scanDeviceFolderPathForBackup,
+  scanFileListForBackup,
+  ScannedBackupCandidate,
   shareOrSaveToMobileFilesApp,
-  tryNativeDirectoryPickerFirst,
 } from '../utils/localFolderSync';
 import { PWAInstallButton } from './PWAInstallButton';
 
@@ -55,7 +61,10 @@ interface SettingsViewProps {
   onSelectLanguage: (lang: LanguageCode) => void;
   onToggleDarkMode: () => void;
   onSetDarkMode?: (dark: boolean) => void;
-  onRestoreWorkspace: (nextState: WorkspaceState) => void;
+  onRestoreWorkspace: (
+    nextState: WorkspaceState,
+    options?: { skipLocalFolderOverwrite?: boolean }
+  ) => void;
   onResetDefaultWorkspace: () => void;
   onLockApp?: () => void;
 }
@@ -76,11 +85,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onLockApp,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const mobileNativeFolderFileRef = useRef<HTMLInputElement>(null);
+  const directoryPickerInputRef = useRef<HTMLInputElement>(null);
+  const iphoneFilesInputRef = useRef<HTMLInputElement>(null);
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+
+  // Ensure webkitdirectory / directory attributes are applied cleanly on mount for iPhone Safari & mobile browsers
+  useEffect(() => {
+    const el = directoryPickerInputRef.current;
+    if (el) {
+      el.setAttribute('webkitdirectory', '');
+      el.setAttribute('directory', '');
+      el.setAttribute('mozdirectory', '');
+    }
+  }, []);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -191,7 +211,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const [customFolderNameInput, setCustomFolderNameInput] = useState(
-    localFolderMeta?.folderName || 'Internal Storage/Documents/TaskTracker'
+    localFolderMeta?.folderName || 'On My Phone/MasarBackups'
   );
   const [folderSyncFeedback, setFolderSyncFeedback] = useState<{
     type: 'success' | 'error';
@@ -204,37 +224,96 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     loadDeviceFolderOptions()
   );
   const [selectedPickerFolderPath, setSelectedPickerFolderPath] = useState<string>(
-    localFolderMeta?.folderName || 'Internal Storage/Documents/TaskTracker'
+    localFolderMeta?.folderName || 'On My Phone/MasarBackups'
   );
   const [newFolderInput, setNewFolderInput] = useState('');
+  const [isScanningFolder, setIsScanningFolder] = useState(false);
+  const [selectedFolderScanPreview, setSelectedFolderScanPreview] = useState<{
+    folderName: string;
+    hasBackup: boolean;
+    backup: ScannedBackupCandidate | null;
+  } | null>(null);
+  const [pendingBackupConfirmation, setPendingBackupConfirmation] = useState<{
+    folderName: string;
+    backup: ScannedBackupCandidate;
+    dirHandle?: any;
+  } | null>(null);
+
+  const runLiveScanPreviewForPath = async (folderPath: string) => {
+    setIsScanningFolder(true);
+    try {
+      const scanRes = await scanDeviceFolderPathForBackup(folderPath);
+      setSelectedFolderScanPreview({
+        folderName: scanRes.folderName,
+        hasBackup: scanRes.hasBackup,
+        backup: scanRes.backup,
+      });
+      return scanRes;
+    } finally {
+      setIsScanningFolder(false);
+    }
+  };
 
   const handleChooseLocalFolder = () => {
     const latestOptions = loadDeviceFolderOptions();
     setDeviceFolders(latestOptions);
-    setSelectedPickerFolderPath(
+    const initialPath =
       customFolderNameInput.trim() ||
-        localFolderMeta?.folderName ||
-        latestOptions[0]?.path ||
-        'Internal Storage/Documents/TaskTracker'
-    );
+      localFolderMeta?.folderName ||
+      latestOptions[0]?.path ||
+      'On My Phone/MasarBackups';
+    setSelectedPickerFolderPath(initialPath);
+    setSelectedFolderScanPreview(null);
     setIsFolderPickerOpen(true);
+    void runLiveScanPreviewForPath(initialPath);
   };
 
   const handleBrowseNativeSystemDirectory = async () => {
-    const nativeRes = await tryNativeDirectoryPickerFirst(workspace, lang, darkMode);
-    if (nativeRes.connectedNatively && nativeRes.meta) {
-      onUpdateLocalFolderMeta?.(nativeRes.meta);
-      setCustomFolderNameInput(nativeRes.meta.folderName);
-      setSelectedPickerFolderPath(nativeRes.meta.folderName);
-      setIsFolderPickerOpen(false);
-      setFolderSyncFeedback({
-        type: 'success',
-        message: t.localFolderConnectedSuccess,
-      });
+    const win = typeof window !== 'undefined' ? (window as any) : {};
+    if (typeof win.showDirectoryPicker !== 'function') {
+      // Must be called synchronously inside the click handler so iOS Safari preserves user activation
+      directoryPickerInputRef.current?.click();
       return;
     }
-    // If native directory picker is unavailable on mobile, trigger the phone's native file/folder input
-    mobileNativeFolderFileRef.current?.click();
+
+    setIsScanningFolder(true);
+    try {
+      const nativeRes = await openNativeDirectoryAndScan();
+      if (nativeRes.userCancelled) {
+        return;
+      }
+      if (nativeRes.supported && nativeRes.scanResult) {
+        if (nativeRes.scanResult.hasBackup && nativeRes.scanResult.backup) {
+          setPendingBackupConfirmation({
+            folderName: nativeRes.scanResult.folderName,
+            backup: nativeRes.scanResult.backup,
+            dirHandle: nativeRes.scanResult.dirHandle,
+          });
+          return;
+        }
+        const nextMeta = await finalizeFolderConnection(
+          workspace,
+          lang,
+          darkMode,
+          nativeRes.scanResult.folderName,
+          nativeRes.scanResult.dirHandle
+        );
+        onUpdateLocalFolderMeta?.(nextMeta);
+        setCustomFolderNameInput(nextMeta.folderName);
+        setSelectedPickerFolderPath(nextMeta.folderName);
+        setIsFolderPickerOpen(false);
+        setFolderSyncFeedback({
+          type: 'success',
+          message: t.localFolderConnectedSuccess,
+        });
+        return;
+      }
+    } finally {
+      setIsScanningFolder(false);
+    }
+
+    // Fallback if showDirectoryPicker threw SecurityError in an iframe
+    directoryPickerInputRef.current?.click();
   };
 
   const handleCreateNewDeviceFolder = (e: React.FormEvent) => {
@@ -246,14 +325,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setSelectedPickerFolderPath(created.path);
     setCustomFolderNameInput(created.path);
     setNewFolderInput('');
+    void runLiveScanPreviewForPath(created.path);
   };
 
   const handleConfirmModalFolderSelection = async () => {
     const targetPath =
       selectedPickerFolderPath.trim() ||
       customFolderNameInput.trim() ||
-      'Internal Storage/Documents/TaskTracker';
-    const nextMeta = await connectSelectedDeviceFolder(
+      'On My Phone/MasarBackups';
+
+    const scanRes = await runLiveScanPreviewForPath(targetPath);
+    if (scanRes.hasBackup && scanRes.backup) {
+      setPendingBackupConfirmation({
+        folderName: scanRes.folderName,
+        backup: scanRes.backup,
+      });
+      return;
+    }
+
+    const nextMeta = await finalizeFolderConnection(
       workspace,
       lang,
       darkMode,
@@ -268,37 +358,141 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     });
   };
 
-  const handleNativeMobileFileOrFolderChosen = async (
+  const handleDirectoryFilesSelected = async (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    // Extract folder name from webkitRelativePath if available, or build a mobile folder path
-    const relPath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
-    const inferredFolder =
-      relPath && relPath.includes('/')
-        ? `PhoneStorage/${relPath.split('/').slice(0, -1).join('/')}`
-        : `PhoneStorage/Documents/${file.name.replace(/\.json$/i, '')}`;
+    setIsScanningFolder(true);
+    try {
+      const scanRes = await scanFileListForBackup(files);
+      const createdOption = addCustomDeviceFolderOption(scanRes.folderName);
+      setDeviceFolders(loadDeviceFolderOptions());
+      setSelectedPickerFolderPath(createdOption.path);
+      setCustomFolderNameInput(createdOption.path);
 
-    const createdOption = addCustomDeviceFolderOption(inferredFolder);
+      if (scanRes.hasBackup && scanRes.backup) {
+        setPendingBackupConfirmation({
+          folderName: createdOption.path,
+          backup: scanRes.backup,
+        });
+        return;
+      }
+
+      const nextMeta = await finalizeFolderConnection(
+        workspace,
+        lang,
+        darkMode,
+        createdOption.path
+      );
+      onUpdateLocalFolderMeta?.(nextMeta);
+      setIsFolderPickerOpen(false);
+      setFolderSyncFeedback({
+        type: 'success',
+        message: t.localFolderConnectedSuccess,
+      });
+    } finally {
+      setIsScanningFolder(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleIphoneFilesSelected = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsScanningFolder(true);
+    try {
+      const scanRes = await scanFileListForBackup(files);
+      if (scanRes.hasBackup && scanRes.backup) {
+        const createdOption = addCustomDeviceFolderOption(scanRes.folderName);
+        setDeviceFolders(loadDeviceFolderOptions());
+        setSelectedPickerFolderPath(createdOption.path);
+        setCustomFolderNameInput(createdOption.path);
+        setPendingBackupConfirmation({
+          folderName: createdOption.path,
+          backup: scanRes.backup,
+        });
+      } else {
+        setFolderSyncFeedback({
+          type: 'error',
+          message: t.noBackupFoundNoJsonError,
+        });
+      }
+    } finally {
+      setIsScanningFolder(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleConfirmLoadScannedBackup = async () => {
+    if (!pendingBackupConfirmation) return;
+    const { folderName, backup, dirHandle } = pendingBackupConfirmation;
+
+    const cleanReplacementWorkspace: WorkspaceState = {
+      folders: backup.workspace.folders,
+      projects: backup.workspace.projects,
+      tasks: backup.workspace.tasks,
+      trash: Array.isArray(backup.workspace.trash) ? backup.workspace.trash : [],
+      notifications: Array.isArray(backup.workspace.notifications)
+        ? backup.workspace.notifications
+        : [],
+    };
+
+    let nextLang = lang;
+    let nextDark = darkMode;
+
+    if (backup.preferences) {
+      if (
+        backup.preferences.lang === 'en' ||
+        backup.preferences.lang === 'ar' ||
+        backup.preferences.lang === 'he'
+      ) {
+        nextLang = backup.preferences.lang;
+        onSelectLanguage(nextLang);
+      }
+      if (typeof backup.preferences.darkMode === 'boolean') {
+        nextDark = backup.preferences.darkMode;
+        if (onSetDarkMode) {
+          onSetDarkMode(nextDark);
+        } else if (nextDark !== darkMode) {
+          onToggleDarkMode();
+        }
+      }
+      if (backup.preferences.appPassword) {
+        saveAppPassword(backup.preferences.appPassword);
+      }
+    }
+
+    const createdOption = addCustomDeviceFolderOption(folderName);
     setDeviceFolders(loadDeviceFolderOptions());
     setSelectedPickerFolderPath(createdOption.path);
     setCustomFolderNameInput(createdOption.path);
 
-    const nextMeta = await connectSelectedDeviceFolder(
-      workspace,
-      lang,
-      darkMode,
-      createdOption.path
+    // 1. Delete old app data & load the new data from the backup (without overwriting any prior folder)
+    onRestoreWorkspace(cleanReplacementWorkspace, {
+      skipLocalFolderOverwrite: true,
+    });
+
+    // 2. Connect the scanned folder with the new backup state
+    const nextMeta = await finalizeFolderConnection(
+      cleanReplacementWorkspace,
+      nextLang,
+      nextDark,
+      createdOption.path,
+      dirHandle
     );
     onUpdateLocalFolderMeta?.(nextMeta);
+
+    setPendingBackupConfirmation(null);
     setIsFolderPickerOpen(false);
     setFolderSyncFeedback({
       type: 'success',
-      message: t.localFolderConnectedSuccess,
+      message: t.backupRestoredSuccess,
     });
-    e.target.value = '';
   };
 
   const handleShareOrSaveToMobileFiles = async () => {
@@ -611,12 +805,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
         </div>
 
-        {/* Hidden native file/folder input for mobile OS Files app integration */}
+        {/* Hidden native folder & iPhone Files inputs (no accept attribute so iOS Safari never greys out JSON files) */}
         <input
-          ref={mobileNativeFolderFileRef}
+          ref={directoryPickerInputRef}
           type="file"
-          accept=".json,application/json"
-          onChange={handleNativeMobileFileOrFolderChosen}
+          multiple
+          data-testid="native-directory-input"
+          onChange={handleDirectoryFilesSelected}
+          className="hidden"
+        />
+        <input
+          ref={iphoneFilesInputRef}
+          type="file"
+          multiple
+          data-testid="iphone-files-picker-input"
+          onChange={handleIphoneFilesSelected}
           className="hidden"
         />
 
@@ -778,35 +981,82 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
               {/* Scrollable Folder Browser Body */}
               <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-                {/* Native Mobile Files App Quick Actions */}
+                {/* Native iPhone / Device Folder & Files App Quick Actions */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     type="button"
                     data-testid="open-native-mobile-files-btn"
                     onClick={handleBrowseNativeSystemDirectory}
-                    className="h-9 px-3 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    className="h-9 px-3 rounded-lg text-xs font-semibold border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                    <span className="truncate">{t.folderPickerOpenNativeFilesButton}</span>
+                    <FolderOpen className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{t.folderPickerBrowseFolderButton}</span>
                   </button>
 
                   <button
                     type="button"
-                    data-testid="save-to-mobile-files-btn"
-                    onClick={handleShareOrSaveToMobileFiles}
-                    className="h-9 px-3 rounded-lg text-xs font-semibold border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    data-testid="pick-iphone-files-btn"
+                    onClick={() => iphoneFilesInputRef.current?.click()}
+                    className="h-9 px-3 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    <Share2 className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{t.folderPickerShareToFilesButton}</span>
+                    <Smartphone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span className="truncate">{t.folderPickerPickIphoneFilesButton}</span>
                   </button>
                 </div>
+
+                {/* Live Automatic Backup Scan Status Banner for Selected Folder */}
+                {isScanningFolder ? (
+                  <div
+                    data-testid="folder-scanning-status"
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-blue-200 dark:border-blue-800/60 bg-blue-50/70 dark:bg-blue-950/40 text-xs text-blue-700 dark:text-blue-300"
+                  >
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>{t.scanningFolderLabel}</span>
+                  </div>
+                ) : selectedFolderScanPreview ? (
+                  <div
+                    data-testid="folder-scan-preview-banner"
+                    className={`flex items-start gap-2.5 px-3 py-2.5 rounded-xl border text-xs ${
+                      selectedFolderScanPreview.hasBackup
+                        ? 'border-amber-200 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
+                        : 'border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                    }`}
+                  >
+                    {selectedFolderScanPreview.hasBackup ? (
+                      <FileJson className="w-4 h-4 shrink-0 mt-0.5" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      {selectedFolderScanPreview.hasBackup &&
+                      selectedFolderScanPreview.backup ? (
+                        <>
+                          <div className="font-semibold flex flex-wrap items-center gap-1.5">
+                            <span>{t.folderBackupDetectedBadge}:</span>
+                            <span className="font-mono text-[11px]">
+                              {selectedFolderScanPreview.backup.fileName}
+                            </span>
+                          </div>
+                          <div className="text-[11px] opacity-90 mt-0.5">
+                            {selectedFolderScanPreview.backup.workspace.folders.length} /{' '}
+                            {selectedFolderScanPreview.backup.workspace.projects.length} /{' '}
+                            {selectedFolderScanPreview.backup.workspace.tasks.length} •{' '}
+                            {formatFileSize(selectedFolderScanPreview.backup.byteLength)}
+                          </div>
+                        </>
+                      ) : (
+                        <span>{t.noBackupInFolderNote}</span>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
 
                 {/* Device Storage Folders List */}
                 <div className="space-y-2">
                   <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400">
                     {t.folderPickerDeviceFoldersHeading}
                   </div>
-                  <div className="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
                     {deviceFolders.map((folder) => {
                       const isSelected = selectedPickerFolderPath === folder.path;
                       return (
@@ -817,6 +1067,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           onClick={() => {
                             setSelectedPickerFolderPath(folder.path);
                             setCustomFolderNameInput(folder.path);
+                            void runLiveScanPreviewForPath(folder.path);
                           }}
                           className={`w-full flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl border text-left rtl:text-right transition-colors cursor-pointer ${
                             isSelected
@@ -874,6 +1125,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     </button>
                   </div>
                 </form>
+
+                {/* Save to Phone Files Share Sheet shortcut */}
+                <button
+                  type="button"
+                  data-testid="save-to-mobile-files-btn"
+                  onClick={handleShareOrSaveToMobileFiles}
+                  className="w-full h-9 px-3 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Share2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span className="truncate">{t.folderPickerShareToFilesButton}</span>
+                </button>
               </div>
 
               {/* Modal Footer */}
@@ -889,10 +1151,107 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   type="button"
                   data-testid="confirm-folder-picker-btn"
                   onClick={handleConfirmModalFolderSelection}
-                  className="h-9 px-4 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  disabled={isScanningFolder}
+                  className="h-9 px-4 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                   <span>{t.folderPickerSelectButton}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Confirmation Dialog When Scanned Folder Contains an Existing Backup */}
+        {pendingBackupConfirmation && (
+          <div
+            data-testid="confirm-load-folder-backup-modal"
+            className="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
+          >
+            <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+              <div className="p-5 space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/60 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                      {t.confirmLoadBackupTitle}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+                      {pendingBackupConfirmation.folderName}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Warning Banner */}
+                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 text-xs text-rose-700 dark:text-rose-300 leading-relaxed font-medium">
+                  {t.confirmLoadBackupWarning}
+                </div>
+
+                {/* Backup File & Data Comparison */}
+                <div className="space-y-2.5 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-slate-500 dark:text-slate-400">
+                      {t.backupFileDetailsLabel}
+                    </span>
+                    <span className="font-mono font-semibold text-blue-600 dark:text-blue-400 truncate max-w-[180px]">
+                      {pendingBackupConfirmation.backup.fileName}
+                    </span>
+                  </div>
+
+                  {pendingBackupConfirmation.backup.exportedAt && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-slate-500 dark:text-slate-400">
+                        {t.lastOverwrittenLabel}
+                      </span>
+                      <span className="font-mono text-slate-700 dark:text-slate-300">
+                        {formatDateTimeStamp(pendingBackupConfirmation.backup.exportedAt)}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="border-t border-slate-200 dark:border-slate-800 pt-2 flex items-center justify-between gap-2">
+                    <span className="text-rose-600 dark:text-rose-400 font-medium">
+                      {t.currentDataSummaryLabel}
+                    </span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300">
+                      {workspace.folders.length} / {workspace.projects.length} /{' '}
+                      {workspace.tasks.length}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                      {t.backupDataSummaryLabel}
+                    </span>
+                    <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-300">
+                      {pendingBackupConfirmation.backup.workspace.folders.length} /{' '}
+                      {pendingBackupConfirmation.backup.workspace.projects.length} /{' '}
+                      {pendingBackupConfirmation.backup.workspace.tasks.length} (
+                      {formatFileSize(pendingBackupConfirmation.backup.byteLength)})
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
+                <button
+                  type="button"
+                  data-testid="cancel-load-backup-btn"
+                  onClick={() => setPendingBackupConfirmation(null)}
+                  className="h-9 px-3.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  type="button"
+                  data-testid="confirm-replace-with-backup-btn"
+                  onClick={handleConfirmLoadScannedBackup}
+                  className="h-9 px-4 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>{t.confirmDeleteOldAndLoadButton}</span>
                 </button>
               </div>
             </div>

@@ -682,6 +682,110 @@ test('resolveFilePreviewKind and decodeDataUrlTextPreview handle PDF, text, imag
   assert.equal(decodeDataUrlTextPreview('https://example.com/file.pdf'), null);
 });
 
+test('parseBackupPayload, scanFileListForBackup, and scanDirectoryHandleForBackup detect backups automatically without overwriting', async () => {
+  const {
+    parseBackupPayload,
+    scanFileListForBackup,
+    scanDirectoryHandleForBackup,
+    AUTOSAVE_FILENAME,
+  } = await import('./localFolderSync.ts');
+
+  const backupWorkspace: WorkspaceState = {
+    folders: [{ id: 'f-bak', name: 'Restored Folder', createdAt: '2026-11-14T12:00:00Z' }],
+    projects: [
+      {
+        id: 'p-bak',
+        folderId: 'f-bak',
+        name: 'Restored Project',
+        description: 'Loaded cleanly after confirmation',
+        createdAt: '2026-11-14T12:00:00Z',
+      },
+    ],
+    tasks: [makeMockTask({ id: 'tsk-bak', folderId: 'f-bak', projectId: 'p-bak', title: 'Restored Task Alpha' })],
+    trash: [],
+    notifications: [],
+  };
+
+  const payloadString = JSON.stringify({
+    version: 4,
+    exportedAt: '2026-11-14T15:30:00Z',
+    overwrittenFile: AUTOSAVE_FILENAME,
+    preferences: { lang: 'ar', darkMode: true, appPassword: 'S@120687h' },
+    workspace: backupWorkspace,
+  });
+
+  const parsed = parseBackupPayload(payloadString, AUTOSAVE_FILENAME, 'On My iPhone/Work', 'file_list');
+  assert.ok(parsed);
+  assert.equal(parsed!.workspace.tasks[0].title, 'Restored Task Alpha');
+  assert.equal(parsed!.preferences?.lang, 'ar');
+  assert.equal(parsed!.preferences?.darkMode, true);
+  assert.equal(parseBackupPayload('{ "invalid": true }'), null);
+
+  // 1. Scan iPhone/directory FileList containing unrelated files + backup JSON
+  const fileListScan = await scanFileListForBackup([
+    {
+      name: 'notes.txt',
+      webkitRelativePath: 'MyIphoneFolder/notes.txt',
+      text: async () => 'plain text file',
+      size: 15,
+    },
+    {
+      name: 'other_backup.json',
+      webkitRelativePath: 'MyIphoneFolder/other_backup.json',
+      text: async () => JSON.stringify({ folders: [], projects: [], tasks: [] }),
+      size: 40,
+    },
+    {
+      name: AUTOSAVE_FILENAME,
+      webkitRelativePath: `MyIphoneFolder/${AUTOSAVE_FILENAME}`,
+      text: async () => payloadString,
+      size: payloadString.length,
+    },
+  ]);
+
+  assert.equal(fileListScan.hasBackup, true);
+  assert.equal(fileListScan.folderName, 'iPhone Files/MyIphoneFolder');
+  assert.equal(fileListScan.backup?.fileName, AUTOSAVE_FILENAME);
+  assert.equal(fileListScan.backup?.workspace.tasks[0].title, 'Restored Task Alpha');
+
+  // 2. Scan empty folder FileList (no valid backup JSON)
+  const emptyScan = await scanFileListForBackup([
+    {
+      name: 'readme.txt',
+      webkitRelativePath: 'FreshFolder/readme.txt',
+      text: async () => 'hello',
+      size: 5,
+    },
+  ]);
+  assert.equal(emptyScan.hasBackup, false);
+  assert.equal(emptyScan.folderName, 'iPhone Files/FreshFolder');
+
+  // 3. Scan DirectoryHandle ensures it does NOT invoke createWritable while scanning
+  let writableCalledDuringScan = false;
+  const mockDirHandle = {
+    name: 'DesktopWorkSync',
+    getFileHandle: async (name: string) => {
+      assert.equal(name, AUTOSAVE_FILENAME);
+      return {
+        getFile: async () => ({
+          name: AUTOSAVE_FILENAME,
+          text: async () => payloadString,
+        }),
+        createWritable: async () => {
+          writableCalledDuringScan = true;
+          throw new Error('Must not overwrite during scan');
+        },
+      };
+    },
+  };
+
+  const dirScan = await scanDirectoryHandleForBackup(mockDirHandle);
+  assert.equal(dirScan.hasBackup, true);
+  assert.equal(writableCalledDuringScan, false);
+  assert.equal(dirScan.backup?.workspace.folders[0].name, 'Restored Folder');
+});
+
+
 
 
 

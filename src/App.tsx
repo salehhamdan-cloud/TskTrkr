@@ -240,7 +240,10 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const commitWorkspace = (updater: (prev: WorkspaceState) => WorkspaceState) => {
+  const commitWorkspace = (
+    updater: (prev: WorkspaceState) => WorkspaceState,
+    options?: { skipLocalFolderOverwrite?: boolean }
+  ) => {
     setWorkspace((prev) => {
       const updated = updater(prev);
       const withReminders = generateDueTaskReminders(updated, new Date(), {
@@ -253,7 +256,7 @@ export default function App() {
 
       // Automatically overwrite the single file (`masar_workspace_autosave.json`) in the chosen local folder
       const currentFolderMeta = loadLocalFolderMeta();
-      if (currentFolderMeta.isConnected) {
+      if (!options?.skipLocalFolderOverwrite && currentFolderMeta.isConnected) {
         overwriteLocalSaveFile(withReminders, lang, isDarkMode, false).then(
           (updatedFolderMeta) => {
             setLocalFolderMeta(updatedFolderMeta);
@@ -1460,8 +1463,17 @@ export default function App() {
               onSelectLanguage={setLang}
               onToggleDarkMode={() => setIsDarkMode((d) => !d)}
               onSetDarkMode={(dark) => setIsDarkMode(dark)}
-              onRestoreWorkspace={(nextState) => {
-                commitWorkspace(() => nextState);
+              onRestoreWorkspace={(nextState, options) => {
+                const normalizedReplacement: WorkspaceState = {
+                  folders: nextState.folders,
+                  projects: nextState.projects,
+                  tasks: nextState.tasks,
+                  trash: Array.isArray(nextState.trash) ? nextState.trash : [],
+                  notifications: Array.isArray(nextState.notifications)
+                    ? nextState.notifications
+                    : [],
+                };
+                commitWorkspace(() => normalizedReplacement, options);
               }}
               onResetDefaultWorkspace={handleResetDefaultWorkspaceWithConfirm}
               onLockApp={handleLockApp}
