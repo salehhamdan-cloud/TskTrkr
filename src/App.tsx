@@ -9,12 +9,9 @@ import {
   Layers,
   Lock,
   Menu,
-  Moon,
   Plus,
   Search,
   Settings,
-  Sun,
-  Trash2,
   Wifi,
   X,
 } from 'lucide-react';
@@ -92,7 +89,6 @@ import { DashboardView } from './components/DashboardView';
 import { SettingsView } from './components/SettingsView';
 import { NewTaskModal } from './components/NewTaskModal';
 import { PriorityBadge } from './components/PriorityBadge';
-import { PWAInstallButton } from './components/PWAInstallButton';
 import { AppLockScreen } from './components/AppLockScreen';
 import { ConfirmDeleteModal, ConfirmDeleteState } from './components/ConfirmDeleteModal';
 import { TrashView } from './components/TrashView';
@@ -1203,6 +1199,7 @@ export default function App() {
         <div className="order-1 flex items-center gap-1.5 sm:gap-3 min-w-0 shrink">
           <button
             type="button"
+            data-testid="mobile-menu-btn"
             onClick={() => setIsMobileSidebarOpen(true)}
             aria-label={t.openMenu}
             className="lg:hidden h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
@@ -1332,89 +1329,8 @@ export default function App() {
           )}
         </div>
 
-        {/* Right / End: PWA Install + Notifications + Trash + Settings + Theme + Lock + New Task */}
-        <div className="order-2 sm:order-3 flex items-center gap-1 sm:gap-2 shrink-0">
-          <div className="hidden md:block">
-            <PWAInstallButton t={t} variant="compact" />
-          </div>
-
-          {/* Notifications Bell Icon Button */}
-          <button
-            type="button"
-            data-testid="header-notifications-btn"
-            onClick={() => setSelectedNode({ type: 'notifications' })}
-            aria-label={t.notificationsNav}
-            title={t.notificationsNav}
-            className={`relative h-8 min-w-[30px] px-1.5 sm:h-9 sm:min-w-[36px] sm:px-2.5 rounded-lg border inline-flex items-center justify-center gap-1 text-xs font-medium transition-colors cursor-pointer ${
-              selectedNode.type === 'notifications'
-                ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
-                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            {unreadNotificationsCount > 0 && (
-              <span className="px-1 sm:px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-mono font-bold bg-blue-600 text-white">
-                {unreadNotificationsCount}
-              </span>
-            )}
-          </button>
-
-          {/* Trash Icon Button */}
-          <button
-            type="button"
-            data-testid="header-trash-btn"
-            onClick={() => setSelectedNode({ type: 'trash' })}
-            aria-label={t.trashNav}
-            title={t.trashNav}
-            className={`relative h-8 min-w-[30px] px-1.5 sm:h-9 sm:min-w-[36px] sm:px-2.5 rounded-lg border inline-flex items-center justify-center gap-1 text-xs font-medium transition-colors cursor-pointer ${
-              selectedNode.type === 'trash'
-                ? 'border-rose-600 bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
-                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            {trashItems.length > 0 && (
-              <span className="px-1 sm:px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-mono font-semibold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300">
-                {trashItems.length}
-              </span>
-            )}
-          </button>
-
-          {/* Settings Page Icon Button */}
-          <button
-            type="button"
-            data-testid="header-settings-btn"
-            onClick={() => setSelectedNode({ type: 'settings' })}
-            aria-label={t.settingsNav}
-            title={t.settingsNav}
-            className={`h-8 min-w-[30px] px-1.5 sm:h-9 sm:min-w-[36px] sm:px-2.5 rounded-lg border inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
-              selectedNode.type === 'settings'
-                ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
-                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span className="hidden xl:inline">{t.settingsNav}</span>
-          </button>
-
-          {/* Dark / Light Theme Button */}
-          <button
-            type="button"
-            data-testid="header-theme-btn"
-            onClick={() => setIsDarkMode((d) => !d)}
-            aria-label={isDarkMode ? t.lightTheme : t.darkTheme}
-            className="h-8 min-w-[30px] px-1.5 sm:h-9 sm:min-w-[36px] sm:px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1.5 text-xs font-medium cursor-pointer"
-          >
-            {isDarkMode ? (
-              <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            ) : (
-              <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            )}
-            <span className="hidden 2xl:inline">
-              {isDarkMode ? t.lightTheme : t.darkTheme}
-            </span>
-          </button>
-
+        {/* Right / End: Lock + New Task (Notifications, Trash, Settings, Theme & Install App live in Side List & Settings) */}
+        <div className="order-2 sm:order-3 flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Lock App Button */}
           <button
             type="button"
@@ -1422,15 +1338,16 @@ export default function App() {
             onClick={handleLockApp}
             aria-label={t.lockAppButton}
             title={t.lockAppButton}
-            className="h-8 min-w-[30px] px-1.5 sm:h-9 sm:min-w-[36px] sm:px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer"
+            className="h-8 min-w-[32px] px-2 sm:h-9 sm:min-w-[36px] sm:px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer"
           >
             <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span className="hidden 2xl:inline">{t.lockAppButton}</span>
+            <span className="hidden md:inline">{t.lockAppButton}</span>
           </button>
 
           {/* Primary Action: New Task */}
           <button
             type="button"
+            data-testid="header-new-task-btn"
             onClick={() =>
               setNewTaskContext({
                 isOpen: true,
@@ -1439,10 +1356,10 @@ export default function App() {
               })
             }
             aria-label={t.newTaskButton}
-            className="h-8 px-2 sm:h-9 sm:px-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+            className="h-8 px-2.5 sm:h-9 sm:px-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span className="hidden sm:inline">{t.newTaskButton}</span>
+            <span>{t.newTaskButton}</span>
           </button>
         </div>
       </header>
@@ -1715,6 +1632,7 @@ export default function App() {
       >
         <button
           type="button"
+          data-testid="mobile-nav-dashboard"
           onClick={() => {
             setIsMobileSidebarOpen(false);
             setSelectedNode({ type: 'dashboard' });
@@ -1731,6 +1649,7 @@ export default function App() {
 
         <button
           type="button"
+          data-testid="mobile-nav-workspace"
           onClick={() => setIsMobileSidebarOpen((v) => !v)}
           className={`flex flex-col items-center justify-center min-h-[48px] rounded-xl transition-colors cursor-pointer ${
             isMobileSidebarOpen ||
@@ -1747,6 +1666,7 @@ export default function App() {
 
         <button
           type="button"
+          data-testid="mobile-nav-new-task"
           onClick={() => {
             setIsMobileSidebarOpen(false);
             setNewTaskContext({
@@ -1765,6 +1685,7 @@ export default function App() {
 
         <button
           type="button"
+          data-testid="mobile-nav-notifications"
           onClick={() => {
             setIsMobileSidebarOpen(false);
             setSelectedNode({ type: 'notifications' });
@@ -1784,6 +1705,7 @@ export default function App() {
 
         <button
           type="button"
+          data-testid="mobile-nav-settings"
           onClick={() => {
             setIsMobileSidebarOpen(false);
             setSelectedNode({ type: 'settings' });

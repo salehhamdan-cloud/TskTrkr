@@ -286,6 +286,8 @@ export interface TranslationDictionary {
   folderPickerSelectButton: string;
   folderPickerOpenNativeFilesButton: string;
   folderPickerShareToFilesButton: string;
+  previewFileButton: string;
+  filePreviewModalTitle: string;
 }
 
 export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
@@ -571,6 +573,8 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     folderPickerSelectButton: 'Use Selected Folder & Auto-Overwrite',
     folderPickerOpenNativeFilesButton: 'Open Phone Files App',
     folderPickerShareToFilesButton: 'Save to Phone Folder (Files App)',
+    previewFileButton: 'Preview',
+    filePreviewModalTitle: 'File Preview',
   },
   ar: {
     appName: 'متتبع المهام',
@@ -854,6 +858,8 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     folderPickerSelectButton: 'اعتماد هذا المجلد للحفظ التلقائي',
     folderPickerOpenNativeFilesButton: 'فتح مدير ملفات الهاتف',
     folderPickerShareToFilesButton: 'حفظ في مجلد بالهاتف (تطبيق الملفات)',
+    previewFileButton: 'معاينة الملف',
+    filePreviewModalTitle: 'معاينة الملف المرفق',
   },
   he: {
     appName: 'מעקב משימות Task Tracker',
@@ -1137,6 +1143,8 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     folderPickerSelectButton: 'השתמש בתיקייה שנבחרה לשמירה אוטומטית',
     folderPickerOpenNativeFilesButton: 'פתח סייר קבצים של הטלפון',
     folderPickerShareToFilesButton: 'שמור בתיקייה בטלפון (אפליקציית הקבצים)',
+    previewFileButton: 'תצוגה מקדימה',
+    filePreviewModalTitle: 'תצוגה מקדימה של קובץ',
   },
 };
 

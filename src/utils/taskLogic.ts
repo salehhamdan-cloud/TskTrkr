@@ -1655,3 +1655,131 @@ export function generateDueTaskReminders(
   return nextState;
 }
 
+export type FilePreviewKind = 'pdf' | 'text' | 'image' | 'audio' | 'video' | 'other';
+
+/**
+ * Determines the in-app preview mode for an uploaded attachment based on MIME type and filename extension.
+ */
+export function resolveFilePreviewKind(file: {
+  name: string;
+  mimeType?: string;
+  url?: string;
+}): FilePreviewKind {
+  const mime = (file.mimeType || '').toLowerCase().trim();
+  const ext = (file.name.split('.').pop() || '').toLowerCase().trim();
+  const url = (file.url || '').toLowerCase().trim();
+
+  if (
+    mime === 'application/pdf' ||
+    ext === 'pdf' ||
+    url.startsWith('data:application/pdf')
+  ) {
+    return 'pdf';
+  }
+
+  if (
+    mime.startsWith('image/') ||
+    ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif'].includes(ext) ||
+    url.startsWith('data:image/')
+  ) {
+    return 'image';
+  }
+
+  if (
+    mime.startsWith('audio/') ||
+    ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'].includes(ext) ||
+    url.startsWith('data:audio/')
+  ) {
+    return 'audio';
+  }
+
+  if (
+    mime.startsWith('video/') ||
+    ['mp4', 'webm', 'mov', 'ogv', 'm4v'].includes(ext) ||
+    url.startsWith('data:video/')
+  ) {
+    return 'video';
+  }
+
+  if (
+    mime.startsWith('text/') ||
+    [
+      'application/json',
+      'application/xml',
+      'application/javascript',
+      'application/typescript',
+      'application/x-yaml',
+      'application/csv',
+    ].includes(mime) ||
+    [
+      'txt',
+      'md',
+      'markdown',
+      'csv',
+      'tsv',
+      'json',
+      'xml',
+      'html',
+      'htm',
+      'css',
+      'js',
+      'ts',
+      'jsx',
+      'tsx',
+      'yml',
+      'yaml',
+      'log',
+      'ini',
+      'conf',
+      'env',
+      'sql',
+      'py',
+      'sh',
+    ].includes(ext) ||
+    url.startsWith('data:text/') ||
+    url.startsWith('data:application/json')
+  ) {
+    return 'text';
+  }
+
+  return 'other';
+}
+
+/**
+ * Decodes a data: URL (base64 or URL-encoded) into a UTF-8 text preview string for text/code/CSV/JSON files.
+ */
+export function decodeDataUrlTextPreview(url: string, maxChars = 50000): string | null {
+  if (!url || !url.startsWith('data:')) return null;
+  const commaIdx = url.indexOf(',');
+  if (commaIdx === -1) return null;
+
+  const header = url.slice(0, commaIdx).toLowerCase();
+  const body = url.slice(commaIdx + 1);
+
+  try {
+    let decoded = '';
+    if (header.includes(';base64')) {
+      if (typeof atob === 'function') {
+        const binary = atob(body);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        decoded = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+      } else if (typeof Buffer !== 'undefined') {
+        decoded = Buffer.from(body, 'base64').toString('utf-8');
+      }
+    } else {
+      decoded = decodeURIComponent(body);
+    }
+
+    if (decoded.length > maxChars) {
+      return `${decoded.slice(0, maxChars)}\n\n... [Truncated at ${maxChars} characters]`;
+    }
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+

@@ -8,11 +8,10 @@ import {
   TaskPriority,
 } from '../types/task';
 import {
-  getPriorityLabel,
   resolveLocalizedText,
   TranslationDictionary,
 } from '../i18n/translations';
-import { PriorityBadge, getPriorityTheme } from './PriorityBadge';
+import { PriorityBadge } from './PriorityBadge';
 
 interface NewTaskModalProps {
   isOpen: boolean;
@@ -194,7 +193,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-1">
                 <label
                   htmlFor="new-task-priority"
                   className="block text-xs font-semibold text-slate-700 dark:text-slate-300"
@@ -203,27 +202,18 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
                 </label>
                 <PriorityBadge priority={priority} t={t} size="xs" />
               </div>
-              <div className="grid grid-cols-4 gap-1.5">
-                {(['low', 'medium', 'high', 'critical'] as const).map((p) => {
-                  const isSelected = priority === p;
-                  const theme = getPriorityTheme(p);
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setPriority(p)}
-                      className={`h-9 px-1 text-xs font-semibold rounded-lg border transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                        isSelected
-                          ? theme.activeBtn
-                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dot}`} />
-                      <span className="truncate">{getPriorityLabel(p, t)}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <select
+                id="new-task-priority"
+                data-testid="new-task-priority"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                className="w-full h-10 px-2.5 text-xs font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+              >
+                <option value="low">{t.priorityLow}</option>
+                <option value="medium">{t.priorityMedium}</option>
+                <option value="high">{t.priorityHigh}</option>
+                <option value="critical">{t.priorityCritical}</option>
+              </select>
             </div>
 
             <div className="space-y-2">

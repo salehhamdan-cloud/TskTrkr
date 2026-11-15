@@ -11,6 +11,7 @@ import {
   computeProjectMetrics,
   createFolder,
   createProject,
+  decodeDataUrlTextPreview,
   editAttachmentInTask,
   editTodoInTask,
   editUpdateInTask,
@@ -20,6 +21,7 @@ import {
   removePhotoFromUpdateInTask,
   removeProject,
   removeTodoFromTask,
+  resolveFilePreviewKind,
   searchWorkspace,
   toggleTodoInTask,
   updateFolder,
@@ -642,6 +644,44 @@ test('local folder auto-overwrite builds single-file payload for masar_workspace
   assert.equal(connectedMeta.folderName, 'PhoneStorage/MyMobileTasks');
   assert.equal(connectedMeta.fileName, 'masar_workspace_autosave.json');
 });
+
+test('resolveFilePreviewKind and decodeDataUrlTextPreview handle PDF, text, image, audio, video, and base64 data URLs', () => {
+  assert.equal(
+    resolveFilePreviewKind({ name: 'report.pdf', mimeType: 'application/pdf' }),
+    'pdf'
+  );
+  assert.equal(
+    resolveFilePreviewKind({ name: 'notes.txt', mimeType: 'text/plain' }),
+    'text'
+  );
+  assert.equal(
+    resolveFilePreviewKind({ name: 'config.json', mimeType: 'application/json' }),
+    'text'
+  );
+  assert.equal(
+    resolveFilePreviewKind({ name: 'diagram.png', mimeType: 'image/png' }),
+    'image'
+  );
+  assert.equal(
+    resolveFilePreviewKind({ name: 'recording.mp3', mimeType: 'audio/mpeg' }),
+    'audio'
+  );
+  assert.equal(
+    resolveFilePreviewKind({ name: 'demo.mp4', mimeType: 'video/mp4' }),
+    'video'
+  );
+  assert.equal(
+    resolveFilePreviewKind({ name: 'archive.zip', mimeType: 'application/zip' }),
+    'other'
+  );
+
+  const sampleText = 'Task Tracker File Preview Test — 100% Working';
+  const b64 = Buffer.from(sampleText, 'utf-8').toString('base64');
+  const dataUrl = `data:text/plain;base64,${b64}`;
+  assert.equal(decodeDataUrlTextPreview(dataUrl), sampleText);
+  assert.equal(decodeDataUrlTextPreview('https://example.com/file.pdf'), null);
+});
+
 
 
 

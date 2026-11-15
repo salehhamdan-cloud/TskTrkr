@@ -9,6 +9,7 @@ import {
   Clock,
   CornerDownRight,
   Download,
+  Eye,
   FileDown,
   FileText,
   Image as ImageIcon,
@@ -29,19 +30,20 @@ import {
   TaskStatus,
 } from '../types/task';
 import {
-  getPriorityLabel,
   getStatusLabel,
   resolveLocalizedText,
   TranslationDictionary,
 } from '../i18n/translations';
 import {
   calculateTaskProgress,
+  decodeDataUrlTextPreview,
   formatDateTimeStamp,
   formatFileSize,
+  resolveFilePreviewKind,
 } from '../utils/taskLogic';
 import { exportTaskToPdf } from '../utils/pdfExport';
 import { PhotoAnnotationModal } from './PhotoAnnotationModal';
-import { PriorityBadge, getPriorityTheme } from './PriorityBadge';
+import { PriorityBadge } from './PriorityBadge';
 
 interface TaskDetailPanelProps {
   task: TaskItem;
@@ -232,6 +234,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
     photo: TaskAttachment;
     target: PhotoTargetRef;
   } | null>(null);
+  const [previewFile, setPreviewFile] = useState<TaskAttachment | null>(null);
   const [annotatingState, setAnnotatingState] = useState<{
     photo: TaskAttachment;
     target: PhotoTargetRef;
@@ -767,7 +770,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1">
                   <label
                     htmlFor="detail-task-priority"
                     className="block text-xs font-medium text-slate-600 dark:text-slate-400"
@@ -776,27 +779,22 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                   </label>
                   <PriorityBadge priority={task.priority} t={t} size="xs" />
                 </div>
-                <div className="grid grid-cols-4 gap-1">
-                  {(['low', 'medium', 'high', 'critical'] as const).map((p) => {
-                    const isSelected = task.priority === p;
-                    const theme = getPriorityTheme(p);
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => onUpdateTaskMeta(task.id, { priority: p })}
-                        className={`h-9 px-1 text-xs font-semibold rounded-lg border transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                          isSelected
-                            ? theme.activeBtn
-                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-                        }`}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dot}`} />
-                        <span className="truncate">{getPriorityLabel(p, t)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <select
+                  id="detail-task-priority"
+                  data-testid="detail-task-priority"
+                  value={task.priority}
+                  onChange={(e) =>
+                    onUpdateTaskMeta(task.id, {
+                      priority: e.target.value as TaskPriority,
+                    })
+                  }
+                  className="w-full h-9 px-2.5 text-xs font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                >
+                  <option value="low">{t.priorityLow}</option>
+                  <option value="medium">{t.priorityMedium}</option>
+                  <option value="high">{t.priorityHigh}</option>
+                  <option value="critical">{t.priorityCritical}</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 gap-2 min-w-0">
@@ -1808,18 +1806,35 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                           </div>
                         </div>
                       ) : (
-                        <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800">
-                          <div className="w-9 h-9 rounded-lg bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                            <FileText className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
-                              {att.name}
+                        <div
+                          onClick={() => setPreviewFile(att)}
+                          className="p-3.5 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100/80 dark:hover:bg-slate-800 flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="w-9 h-9 rounded-lg bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                              <FileText className="w-4 h-4" />
                             </div>
-                            <div className="text-[11px] text-slate-500 font-mono tabular-nums">
-                              {formatFileSize(att.sizeBytes)}
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
+                                {att.name}
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono tabular-nums">
+                                {formatFileSize(att.sizeBytes)}
+                              </div>
                             </div>
                           </div>
+                          <button
+                            type="button"
+                            data-testid={`preview-file-btn-${att.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewFile(att);
+                            }}
+                            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold rounded-md inline-flex items-center gap-1 shrink-0 cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>{t.previewFileButton}</span>
+                          </button>
                         </div>
                       )}
 
@@ -1870,7 +1885,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                             </div>
 
                             <div className="flex items-center gap-0.5 shrink-0">
-                              {att.type === 'photo' && (
+                              {att.type === 'photo' ? (
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -1884,6 +1899,16 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                                   className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded cursor-pointer"
                                 >
                                   <PenTool className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewFile(att)}
+                                  title={t.previewFileButton}
+                                  aria-label={`${t.previewFileButton} ${att.name}`}
+                                  className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded cursor-pointer"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
                                 </button>
                               )}
                               <button
@@ -1974,6 +1999,154 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                 referrerPolicy="no-referrer"
                 className="max-h-[70vh] w-auto object-contain"
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Uploaded File Preview Modal */}
+      {previewFile && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          data-testid="file-preview-modal"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
+          onClick={() => setPreviewFile(null)}
+        >
+          <div
+            className="max-w-3xl w-full max-h-[90dvh] flex flex-col bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
+                    {previewFile.name}
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">
+                    {formatFileSize(previewFile.sizeBytes)} · {previewFile.mimeType || 'application/octet-stream'}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={previewFile.url}
+                  download={previewFile.name}
+                  className="h-8 px-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>{t.download}</span>
+                </a>
+                <button
+                  type="button"
+                  data-testid="close-file-preview-btn"
+                  onClick={() => setPreviewFile(null)}
+                  className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white rounded-lg cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-slate-50 dark:bg-slate-950">
+              {(() => {
+                const kind = resolveFilePreviewKind(previewFile);
+                const decodedText =
+                  kind === 'text' ? decodeDataUrlTextPreview(previewFile.url) : null;
+
+                if (kind === 'pdf' && previewFile.url && previewFile.url !== '#') {
+                  return (
+                    <iframe
+                      src={previewFile.url}
+                      title={previewFile.name}
+                      className="w-full h-[65vh] rounded-xl border border-slate-200 dark:border-slate-800 bg-white"
+                    />
+                  );
+                }
+
+                if (kind === 'image' && previewFile.url && previewFile.url !== '#') {
+                  return (
+                    <div className="flex items-center justify-center bg-slate-900 rounded-xl p-3">
+                      <img
+                        src={previewFile.url}
+                        alt={previewFile.name}
+                        className="max-h-[65vh] w-auto object-contain rounded-lg"
+                      />
+                    </div>
+                  );
+                }
+
+                if (kind === 'audio' && previewFile.url && previewFile.url !== '#') {
+                  return (
+                    <div className="py-10 flex flex-col items-center justify-center gap-4">
+                      <audio src={previewFile.url} controls className="w-full max-w-md" />
+                    </div>
+                  );
+                }
+
+                if (kind === 'video' && previewFile.url && previewFile.url !== '#') {
+                  return (
+                    <div className="flex items-center justify-center bg-slate-900 rounded-xl p-3">
+                      <video
+                        src={previewFile.url}
+                        controls
+                        className="max-h-[65vh] w-auto rounded-lg"
+                      />
+                    </div>
+                  );
+                }
+
+                if (decodedText !== null) {
+                  return (
+                    <pre
+                      data-testid="file-preview-text-content"
+                      className="w-full max-h-[60vh] overflow-auto p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words leading-relaxed"
+                    >
+                      {decodedText}
+                    </pre>
+                  );
+                }
+
+                return (
+                  <div className="p-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col items-center text-center space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                      <FileText className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                        {previewFile.name}
+                      </div>
+                      {previewFile.caption && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          {resolveLocalizedText(
+                            previewFile.caption,
+                            previewFile.localizedCaption,
+                            lang
+                          )}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                      <span className="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800">
+                        {formatFileSize(previewFile.sizeBytes)}
+                      </span>
+                      <span className="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800">
+                        {previewFile.mimeType || 'application/octet-stream'}
+                      </span>
+                      {previewFile.addedAt && (
+                        <span className="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800">
+                          {formatDateTimeStamp(previewFile.addedAt)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
