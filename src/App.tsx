@@ -100,6 +100,7 @@ import {
 import {
   getGoogleDriveAccessToken,
   loadGoogleDriveMeta,
+  preloadGoogleIdentityScript,
   uploadOrOverwriteBackupInDriveFolder,
 } from './utils/googleDriveBackup';
 import { SidebarTree } from './components/SidebarTree';
@@ -266,6 +267,10 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    preloadGoogleIdentityScript();
+  }, []);
+
   const gdriveAutoSyncTimerRef = useRef<number | null>(null);
 
   const commitWorkspace = (
@@ -297,7 +302,6 @@ export default function App() {
       const gdriveToken = getGoogleDriveAccessToken();
       if (
         !options?.skipGoogleDriveAutoSync &&
-        gdriveMeta.isConfigured &&
         gdriveMeta.autoSyncOnChange !== false &&
         gdriveToken
       ) {
@@ -305,18 +309,21 @@ export default function App() {
           window.clearTimeout(gdriveAutoSyncTimerRef.current);
         }
         gdriveAutoSyncTimerRef.current = window.setTimeout(() => {
+          const latestToken = getGoogleDriveAccessToken();
+          const latestMeta = loadGoogleDriveMeta();
+          if (!latestToken || latestMeta.autoSyncOnChange === false) return;
           uploadOrOverwriteBackupInDriveFolder(
-            gdriveToken,
-            gdriveMeta.folderId || 'root',
-            gdriveMeta.folderName || 'My Drive',
+            latestToken,
+            latestMeta.folderId || 'root',
+            latestMeta.folderName || 'My Drive',
             withReminders,
             lang,
             isDarkMode,
-            gdriveMeta.lastBackupFileId
+            latestMeta.lastBackupFileId
           ).catch(() => {
-            // Silent background auto-sync; errors are recorded in status if user syncs manually
+            // Sync error status is recorded in googleDriveBackup state
           });
-        }, 2200);
+        }, 1200);
       }
 
       return withReminders;

@@ -33,9 +33,12 @@ import {
   checkNewerBackupOnDrive,
   createDriveFolder,
   DriveAuthUserInfo,
+  DriveAutoSyncStatus,
   DriveFolderEntry,
   FIREBASE_PROJECT_ID,
   getGoogleDriveAccessToken,
+  getGoogleDriveAuthUser,
+  getGoogleDriveSyncStatus,
   GoogleDriveBackupMeta,
   initGoogleDriveAuth,
   listDriveFolders,
@@ -45,6 +48,7 @@ import {
   scanDriveFolderForBackup,
   signInWithGoogleDrive,
   signOutGoogleDrive,
+  subscribeGoogleDriveState,
   uploadOrOverwriteBackupInDriveFolder,
 } from '../utils/googleDriveBackup';
 
@@ -75,11 +79,16 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
   const [driveMeta, setDriveMeta] = useState<GoogleDriveBackupMeta>(() =>
     loadGoogleDriveMeta()
   );
-  const [authUser, setAuthUser] = useState<DriveAuthUserInfo | null>(null);
+  const [authUser, setAuthUser] = useState<DriveAuthUserInfo | null>(() =>
+    getGoogleDriveAuthUser()
+  );
   const [needsAuth, setNeedsAuth] = useState<boolean>(
     () => !getGoogleDriveAccessToken()
   );
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [autoSyncStatus, setAutoSyncStatus] = useState<DriveAutoSyncStatus>(
+    () => getGoogleDriveSyncStatus().status
+  );
 
   const [authDomainError, setAuthDomainError] = useState<string | null>(null);
   const [popupBlockedError, setPopupBlockedError] = useState(false);
@@ -138,20 +147,36 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
 
   useEffect(() => {
     preloadGoogleIdentityScript();
-    const unsubscribe = initGoogleDriveAuth(
+    const unsubscribeAuth = initGoogleDriveAuth(
       (user) => {
         setAuthUser(user);
         setNeedsAuth(false);
+        setDriveMeta(loadGoogleDriveMeta());
+        setAutoSyncStatus(getGoogleDriveSyncStatus().status);
         setAuthDomainError(null);
         setPopupBlockedError(false);
         setInsufficientScopeError(false);
       },
       (user) => {
         setAuthUser(user);
-        setNeedsAuth(true);
+        setNeedsAuth(!getGoogleDriveAccessToken());
+        setDriveMeta(loadGoogleDriveMeta());
+        setAutoSyncStatus(getGoogleDriveSyncStatus().status);
       }
     );
-    return unsubscribe;
+    const unsubscribeState = subscribeGoogleDriveState(() => {
+      setDriveMeta(loadGoogleDriveMeta());
+      setAutoSyncStatus(getGoogleDriveSyncStatus().status);
+      const latestUser = getGoogleDriveAuthUser();
+      if (latestUser) {
+        setAuthUser(latestUser);
+      }
+      setNeedsAuth(!getGoogleDriveAccessToken());
+    });
+    return () => {
+      unsubscribeAuth();
+      unsubscribeState();
+    };
   }, []);
 
   const handleAuthError = (err: unknown) => {
@@ -211,17 +236,94 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
     return false;
   };
 
-  const handleSignIn = async (): Promise<string | null> => {
+  const performInitialDriveSyncAfterSignIn = async (token: string) => {
+    const currentMeta = loadGoogleDriveMeta();
+    const targetId = currentMeta.folderId || 'root';
+    const targetName = currentMeta.folderName || t.myDriveRootLabel;
+
+    setIsScanningDrive(true);
+    try {
+      const checkRes = await checkNewerBackupOnDrive(
+        token,
+        targetId,
+        targetName,
+        currentMeta.lastBackupAt
+      );
+      const { scanResult, isNewer } = checkRes;
+
+      if (scanResult.hasBackup && scanResult.backup) {
+        const discoveredMeta = saveGoogleDriveMeta({
+          ...currentMeta,
+          isConfigured: true,
+          folderId: scanResult.folderId || targetId,
+          folderName: scanResult.folderName || targetName,
+          lastBackupFileId:
+            scanResult.existingAutosaveFileId || currentMeta.lastBackupFileId,
+        });
+        setDriveMeta(discoveredMeta);
+
+        if (isNewer || !currentMeta.lastBackupAt) {
+          setPendingDriveRestoreConfirm({
+            folderId: scanResult.folderId || targetId,
+            folderName: scanResult.folderName || targetName,
+            backup: scanResult.backup,
+            existingFileId: scanResult.existingAutosaveFileId,
+          });
+        } else {
+          setDriveFeedback({
+            type: 'success',
+            message: t.driveUpToDateToast,
+          });
+        }
+        return;
+      }
+
+      // No existing backup on Drive yet -> immediately upload initial backup so Drive is synced right away
+      if (currentMeta.autoSyncOnChange !== false) {
+        setIsUploadingToDrive(true);
+        try {
+          const uploadedMeta = await uploadOrOverwriteBackupInDriveFolder(
+            token,
+            targetId,
+            targetName,
+            workspace,
+            lang,
+            darkMode,
+            null
+          );
+          setDriveMeta(uploadedMeta);
+          setDriveFeedback({
+            type: 'success',
+            message: t.driveBackupSavedSuccess,
+          });
+        } finally {
+          setIsUploadingToDrive(false);
+        }
+      }
+    } catch (err) {
+      handleAuthError(err);
+    } finally {
+      setIsScanningDrive(false);
+    }
+  };
+
+  const handleSignIn = async (
+    runPostSignInSync = true
+  ): Promise<string | null> => {
     setIsLoggingIn(true);
     setDriveFeedback(null);
     setAuthDomainError(null);
     setPopupBlockedError(false);
     setInsufficientScopeError(false);
     try {
-      const result = await signInWithGoogleDrive(true);
+      const result = await signInWithGoogleDrive(false);
       setAuthUser(result.userInfo);
       setNeedsAuth(false);
       setInsufficientScopeError(false);
+      setDriveMeta(loadGoogleDriveMeta());
+      if (runPostSignInSync) {
+        void performInitialDriveSyncAfterSignIn(result.accessToken);
+      }
       return result.accessToken;
     } catch (err) {
       handleAuthError(err);
@@ -242,6 +344,8 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
       setNeedsAuth(false);
       setAuthDomainError(null);
       setInsufficientScopeError(false);
+      setDriveMeta(loadGoogleDriveMeta());
+      void performInitialDriveSyncAfterSignIn(result.accessToken);
     } catch (err) {
       handleAuthError(err);
     } finally {
@@ -324,7 +428,7 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
   const handleOpenDrivePicker = async () => {
     let token = getGoogleDriveAccessToken();
     if (!token) {
-      token = await handleSignIn();
+      token = await handleSignIn(false);
       if (!token) return;
     }
 
@@ -541,7 +645,7 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
   const handleRequestDriveBackupUpload = async () => {
     let token = getGoogleDriveAccessToken();
     if (!token) {
-      token = await handleSignIn();
+      token = await handleSignIn(false);
       if (!token) return;
     }
     const targetId = driveMeta.folderId || 'root';
@@ -596,7 +700,7 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
   const handleRequestLoadFromDrive = async () => {
     let token = getGoogleDriveAccessToken();
     if (!token) {
-      token = await handleSignIn();
+      token = await handleSignIn(false);
       if (!token) return;
     }
     const targetId = driveMeta.folderId || 'root';
@@ -631,7 +735,7 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
   const handleCheckNewerBackupOnDrive = async () => {
     let token = getGoogleDriveAccessToken();
     if (!token) {
-      token = await handleSignIn();
+      token = await handleSignIn(false);
       if (!token) return;
     }
     const targetId = driveMeta.folderId || 'root';
@@ -649,9 +753,21 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
         checkRes.scanResult.backup &&
         checkRes.isNewer
       ) {
+        const resolvedFolderId = checkRes.scanResult.folderId || targetId;
+        const resolvedFolderName = checkRes.scanResult.folderName || targetName;
+        const updatedMeta = saveGoogleDriveMeta({
+          ...driveMeta,
+          isConfigured: true,
+          folderId: resolvedFolderId,
+          folderName: resolvedFolderName,
+          lastBackupFileId:
+            checkRes.scanResult.existingAutosaveFileId ||
+            driveMeta.lastBackupFileId,
+        });
+        setDriveMeta(updatedMeta);
         setPendingDriveRestoreConfirm({
-          folderId: targetId,
-          folderName: targetName,
+          folderId: resolvedFolderId,
+          folderName: resolvedFolderName,
           backup: checkRes.scanResult.backup,
           existingFileId: checkRes.scanResult.existingAutosaveFileId,
         });
@@ -761,11 +877,19 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
           </div>
         </div>
 
-        {hasActiveToken && driveMeta.isConfigured && (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300">
-            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-            {t.driveConnectedBadge}
-          </span>
+        {hasActiveToken && (
+          <div className="flex items-center gap-2">
+            {(autoSyncStatus === 'syncing' || isUploadingToDrive) && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/60 text-blue-700 dark:text-blue-300">
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                {t.driveAutoSyncedBadge}
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              {t.driveConnectedBadge}
+            </span>
+          </div>
         )}
       </div>
 
@@ -776,7 +900,7 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
             <button
               type="button"
               data-testid="google-drive-signin-btn"
-              onClick={handleSignIn}
+              onClick={() => handleSignIn(true)}
               disabled={isLoggingIn}
               className="gsi-material-button inline-flex items-center gap-2.5 h-10 px-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-2xs text-xs font-semibold transition-colors cursor-pointer disabled:opacity-60"
             >
