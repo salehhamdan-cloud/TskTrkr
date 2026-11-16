@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowRightLeft,
   ArrowUpDown,
+  BookmarkPlus,
   Calendar,
   Check,
   ChevronDown,
@@ -16,7 +17,10 @@ import {
   Image as ImageIcon,
   Pencil,
   PenTool,
+  Pin,
   Plus,
+  Repeat,
+  Tag,
   Trash2,
   Upload,
   X,
@@ -25,9 +29,13 @@ import {
   LanguageCode,
   PhotoTargetRef,
   ProjectGroupItem,
+  RecurrenceCustomUnit,
+  RecurrenceFrequency,
+  TagColor,
   TaskAttachment,
   TaskItem,
   TaskPriority,
+  TaskRecurrenceRule,
   TaskStatus,
 } from '../types/task';
 import {
@@ -123,12 +131,31 @@ interface TaskDetailPanelProps {
         | 'dueTime'
         | 'title'
         | 'description'
+        | 'pinned'
+        | 'tags'
+        | 'recurrence'
       >
     >
   ) => void;
   onMoveTask?: (taskId: string) => void;
+  onTogglePinTask?: (taskId: string) => void;
+  onSaveTaskAsTemplate?: (task: TaskItem) => void;
+  onAddTagToTask?: (taskId: string, label: string, color: TagColor) => void;
+  onRemoveTagFromTask?: (taskId: string, tagId: string) => void;
   onDeleteTask: (taskId: string) => void;
 }
+
+const TAG_PILL_STYLES: Record<TagColor, string> = {
+  blue: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/70',
+  emerald:
+    'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/70',
+  amber:
+    'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/70',
+  rose: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/70',
+  violet:
+    'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/60 dark:text-violet-300 dark:border-violet-800/70',
+  cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/60 dark:text-cyan-300 dark:border-cyan-800/70',
+};
 
 const getNowLocalDatetime = () => {
   const now = new Date();
@@ -167,6 +194,10 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
   onAnnotatePhoto,
   onUpdateTaskMeta,
   onMoveTask,
+  onTogglePinTask,
+  onSaveTaskAsTemplate,
+  onAddTagToTask,
+  onRemoveTagFromTask,
   onDeleteTask,
 }) => {
   const displayTitle = resolveLocalizedText(task.title, task.localizedTitle, lang);
@@ -176,6 +207,11 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
   const [isEditingTaskHeader, setIsEditingTaskHeader] = useState(false);
   const [taskTitleDraft, setTaskTitleDraft] = useState(displayTitle);
   const [taskDescDraft, setTaskDescDraft] = useState(displayDesc);
+
+  // Custom Tag & Template Toast state
+  const [newTagLabel, setNewTagLabel] = useState('');
+  const [newTagColor, setNewTagColor] = useState<TagColor>('blue');
+  const [templateToast, setTemplateToast] = useState<string | null>(null);
 
   // Popup adding window state ('todo' | 'update' | 'attachment' | null)
   const [activeAddModal, setActiveAddModal] = useState<
@@ -685,6 +721,37 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                {onTogglePinTask && (
+                  <button
+                    type="button"
+                    data-testid="pin-task-btn"
+                    onClick={() => onTogglePinTask(task.id)}
+                    aria-label={task.pinned ? t.unpinItemButton : t.pinItemButton}
+                    className={`h-9 px-3 rounded-lg border text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer ${
+                      task.pinned
+                        ? 'border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300'
+                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <Pin className="w-3.5 h-3.5 shrink-0" />
+                    <span>{task.pinned ? t.unpinItemButton : t.pinItemButton}</span>
+                  </button>
+                )}
+                {onSaveTaskAsTemplate && (
+                  <button
+                    type="button"
+                    data-testid="save-task-template-btn"
+                    onClick={() => {
+                      onSaveTaskAsTemplate(task);
+                      setTemplateToast(t.templateSavedToast);
+                      setTimeout(() => setTemplateToast(null), 2600);
+                    }}
+                    className="h-9 px-3 rounded-lg border border-violet-200 dark:border-violet-800/70 bg-violet-50/70 dark:bg-violet-950/40 text-xs font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-100/80 dark:hover:bg-violet-900/50 inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <BookmarkPlus className="w-3.5 h-3.5 shrink-0" />
+                    <span>{t.saveAsTemplateButton}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => exportTaskToPdf(task, lang, t)}
@@ -729,6 +796,14 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                   <span>{t.delete}</span>
                 </button>
               </div>
+            </div>
+          )}
+          {templateToast && (
+            <div
+              data-testid="template-saved-toast"
+              className="mt-3 rounded-lg bg-violet-50 dark:bg-violet-950/60 border border-violet-200 dark:border-violet-800 px-3 py-2 text-xs font-semibold text-violet-800 dark:text-violet-200"
+            >
+              {templateToast}
             </div>
           )}
         </div>
@@ -854,6 +929,216 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                     onChange={(e) => onUpdateTaskMeta(task.id, { dueTime: e.target.value })}
                     className="w-full min-w-0 h-9 px-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                   />
+                </div>
+              </div>
+            </div>
+
+            {/* Recurrence & Custom Tags Row */}
+            <div className="mt-3 pt-3 border-t border-slate-200/70 dark:border-slate-700/60 grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Recurrence Rule */}
+              <div>
+                <label
+                  htmlFor="detail-task-recurrence"
+                  className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 inline-flex items-center gap-1.5"
+                >
+                  <Repeat className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>{t.recurrenceLabel}</span>
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    id="detail-task-recurrence"
+                    data-testid="task-recurrence-select"
+                    value={task.recurrence?.frequency || 'none'}
+                    onChange={(e) => {
+                      const freq = e.target.value as RecurrenceFrequency;
+                      const currentCount =
+                        task.recurrence?.interval ??
+                        task.recurrence?.intervalDays ??
+                        1;
+                      const currentUnit: RecurrenceCustomUnit =
+                        task.recurrence?.customUnit || 'days';
+                      const nextRec: TaskRecurrenceRule = {
+                        frequency: freq,
+                        interval: freq === 'custom' ? currentCount : undefined,
+                        customUnit: freq === 'custom' ? currentUnit : undefined,
+                        intervalDays:
+                          freq === 'custom' && currentUnit === 'days'
+                            ? currentCount
+                            : undefined,
+                      };
+                      onUpdateTaskMeta(task.id, { recurrence: nextRec });
+                    }}
+                    className="flex-1 min-w-[140px] h-9 px-2.5 text-xs font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  >
+                    <option value="none">{t.recurrenceNone}</option>
+                    <option value="daily">{t.recurrenceDaily}</option>
+                    <option value="weekly">{t.recurrenceWeekly}</option>
+                    <option value="monthly">{t.recurrenceMonthly}</option>
+                    <option value="yearly">{t.recurrenceYearly}</option>
+                    <option value="custom">{t.recurrenceCustom}</option>
+                  </select>
+                  {task.recurrence?.frequency === 'custom' && (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={1}
+                        max={999}
+                        data-testid="task-recurrence-interval-input"
+                        value={
+                          task.recurrence.interval ??
+                          task.recurrence.intervalDays ??
+                          1
+                        }
+                        onChange={(e) => {
+                          const nextCount = Math.max(
+                            1,
+                            Number(e.target.value) || 1
+                          );
+                          const unit: RecurrenceCustomUnit =
+                            task.recurrence?.customUnit || 'days';
+                          onUpdateTaskMeta(task.id, {
+                            recurrence: {
+                              frequency: 'custom',
+                              interval: nextCount,
+                              customUnit: unit,
+                              intervalDays:
+                                unit === 'days' ? nextCount : undefined,
+                            },
+                          });
+                        }}
+                        aria-label={t.recurrenceIntervalDaysLabel}
+                        className="w-16 h-9 px-2 text-xs font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      />
+                      <select
+                        data-testid="task-recurrence-unit-select"
+                        value={task.recurrence.customUnit || 'days'}
+                        onChange={(e) => {
+                          const nextUnit = e.target
+                            .value as RecurrenceCustomUnit;
+                          const count =
+                            task.recurrence?.interval ??
+                            task.recurrence?.intervalDays ??
+                            1;
+                          onUpdateTaskMeta(task.id, {
+                            recurrence: {
+                              frequency: 'custom',
+                              interval: count,
+                              customUnit: nextUnit,
+                              intervalDays:
+                                nextUnit === 'days' ? count : undefined,
+                            },
+                          });
+                        }}
+                        aria-label={t.recurrenceCustom}
+                        className="h-9 px-2 text-xs font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      >
+                        <option value="days">{t.recurrenceUnitDays}</option>
+                        <option value="weeks">{t.recurrenceUnitWeeks}</option>
+                        <option value="months">{t.recurrenceUnitMonths}</option>
+                        <option value="years">{t.recurrenceUnitYears}</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Custom Color Tags */}
+              <div data-testid="task-tags-section">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 inline-flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>{t.customTagsLabel}</span>
+                </label>
+                {onAddTagToTask && (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      data-testid="add-tag-input"
+                      value={newTagLabel}
+                      onChange={(e) => setNewTagLabel(e.target.value)}
+                      placeholder={t.addTagPlaceholder}
+                      className="flex-1 min-w-0 h-9 px-2.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    />
+                    <select
+                      data-testid="add-tag-color-select"
+                      value={newTagColor}
+                      onChange={(e) => setNewTagColor(e.target.value as TagColor)}
+                      aria-label="Tag color"
+                      className="h-9 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    >
+                      <option value="blue">Blue</option>
+                      <option value="emerald">Green</option>
+                      <option value="amber">Amber</option>
+                      <option value="rose">Rose</option>
+                      <option value="violet">Violet</option>
+                      <option value="cyan">Cyan</option>
+                    </select>
+                    <button
+                      type="button"
+                      data-testid="add-tag-submit-btn"
+                      onClick={() => {
+                        if (!newTagLabel.trim()) return;
+                        onAddTagToTask(task.id, newTagLabel.trim(), newTagColor);
+                        setNewTagLabel('');
+                      }}
+                      className="h-9 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shrink-0 cursor-pointer"
+                    >
+                      {t.addTagButton}
+                    </button>
+                  </div>
+                )}
+
+                {/* Active Tags + Quick Presets */}
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  {(task.tags || []).map((tg) => (
+                    <span
+                      key={tg.id}
+                      data-testid={`task-tag-pill-${tg.label}`}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
+                        TAG_PILL_STYLES[tg.color] || TAG_PILL_STYLES.blue
+                      }`}
+                    >
+                      <span>{tg.label}</span>
+                      {onRemoveTagFromTask && (
+                        <button
+                          type="button"
+                          onClick={() => onRemoveTagFromTask(task.id, tg.id)}
+                          aria-label={`Remove ${tg.label}`}
+                          className="hover:opacity-75 cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                  {onAddTagToTask &&
+                    (
+                      [
+                        { label: 'Urgent', color: 'rose' as TagColor },
+                        { label: 'Client Approval', color: 'blue' as TagColor },
+                        { label: 'Waiting on Parts', color: 'amber' as TagColor },
+                        { label: 'Site Visit', color: 'emerald' as TagColor },
+                      ] as const
+                    )
+                      .filter(
+                        (preset) =>
+                          !(task.tags || []).some(
+                            (tg) =>
+                              tg.label.toLowerCase() === preset.label.toLowerCase()
+                          )
+                      )
+                      .map((preset) => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          data-testid={`preset-tag-btn-${preset.label}`}
+                          onClick={() =>
+                            onAddTagToTask(task.id, preset.label, preset.color)
+                          }
+                          className="px-2 py-0.5 rounded-md border border-dashed border-slate-300 dark:border-slate-700 text-[10px] font-medium text-slate-500 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 cursor-pointer"
+                        >
+                          + {preset.label}
+                        </button>
+                      ))}
                 </div>
               </div>
             </div>

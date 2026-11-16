@@ -9,16 +9,21 @@ import {
   ChevronDown,
   ChevronRight,
   FileDown,
+  FileSpreadsheet,
   FileText,
   Filter,
   Image as ImageIcon,
   Layers,
+  ListChecks,
   MessageSquare,
   Pencil,
+  Pin,
   Plus,
+  Repeat,
   RotateCcw,
   Search,
   SlidersHorizontal,
+  Tag,
   Trash2,
   X,
 } from 'lucide-react';
@@ -26,7 +31,10 @@ import {
   FolderItem,
   LanguageCode,
   ProjectGroupItem,
+  RecurrenceCustomUnit,
+  RecurrenceFrequency,
   SelectedSidebarNode,
+  TagColor,
   TaskItem,
   TaskPriority,
   TaskStatus,
@@ -37,13 +45,32 @@ import {
   resolveLocalizedText,
   TranslationDictionary,
 } from '../i18n/translations';
-import { calculateTaskProgress, countAllPhotosInTask } from '../utils/taskLogic';
-import { exportProjectToPdf } from '../utils/pdfExport';
+import {
+  calculateTaskProgress,
+  collectAllWorkspaceTags,
+  countAllPhotosInTask,
+  formatRecurrenceSummary,
+} from '../utils/taskLogic';
+import { exportProjectToPdf, exportTasksToExcelCsv } from '../utils/pdfExport';
 import { PriorityBadge, getPriorityTheme } from './PriorityBadge';
+
+const TAG_PILL_STYLES: Record<TagColor, string> = {
+  blue: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/70',
+  emerald:
+    'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/70',
+  amber:
+    'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/70',
+  rose: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/70',
+  violet:
+    'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/60 dark:text-violet-300 dark:border-violet-800/70',
+  cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/60 dark:text-cyan-300 dark:border-cyan-800/70',
+};
 
 interface ProjectDetailViewProps {
   project: ProjectGroupItem;
   parentFolder?: FolderItem;
+  allFolders?: FolderItem[];
+  allProjects?: ProjectGroupItem[];
   tasks: TaskItem[];
   lang: LanguageCode;
   t: TranslationDictionary;
@@ -53,9 +80,26 @@ interface ProjectDetailViewProps {
   onOpenNewTaskModal: () => void;
   onMoveProject?: (projectId: string) => void;
   onMoveTask?: (taskId: string) => void;
+  onTogglePinProject?: (projectId: string) => void;
+  onTogglePinTask?: (taskId: string) => void;
+  onBatchUpdateTasks?: (
+    taskIds: string[],
+    patch: {
+      status?: TaskStatus;
+      priority?: TaskPriority;
+      dueDate?: string;
+      targetProjectId?: string;
+    }
+  ) => void;
+  onBatchDeleteTasks?: (taskIds: string[]) => void;
   onUpdateTaskMeta: (
     taskId: string,
-    patch: Partial<Pick<TaskItem, 'title' | 'description' | 'status' | 'priority' | 'dueDate'>>
+    patch: Partial<
+      Pick<
+        TaskItem,
+        'title' | 'description' | 'status' | 'priority' | 'dueDate' | 'recurrence'
+      >
+    >
   ) => void;
   onDeleteTask: (taskId: string) => void;
 }
@@ -63,6 +107,8 @@ interface ProjectDetailViewProps {
 export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   project,
   parentFolder,
+  allFolders = [],
+  allProjects = [],
   tasks,
   lang,
   t,
@@ -72,6 +118,10 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   onOpenNewTaskModal,
   onMoveProject,
   onMoveTask,
+  onTogglePinProject,
+  onTogglePinTask,
+  onBatchUpdateTasks,
+  onBatchDeleteTasks,
   onUpdateTaskMeta,
   onDeleteTask,
 }) => {
@@ -96,11 +146,18 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [taskTitleDraft, setTaskTitleDraft] = useState('');
   const [taskDescDraft, setTaskDescDraft] = useState('');
   const [taskPriorityDraft, setTaskPriorityDraft] = useState<TaskPriority>('medium');
+  const [taskRecurrenceFreqDraft, setTaskRecurrenceFreqDraft] =
+    useState<RecurrenceFrequency>('none');
+  const [taskRecurrenceIntervalDraft, setTaskRecurrenceIntervalDraft] =
+    useState<number>(1);
+  const [taskRecurrenceUnitDraft, setTaskRecurrenceUnitDraft] =
+    useState<RecurrenceCustomUnit>('days');
 
   // Filtering & Sorting State
   const [statusFilter, setStatusFilter] = useState<'all' | TaskStatus>('all');
   const [priorityFilter, setPriorityFilter] = useState<'all' | TaskPriority>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'overdue' | 'today' | 'upcoming'>('all');
+  const [tagFilter, setTagFilter] = useState<string>('ALL');
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<
     | 'default'
@@ -114,6 +171,19 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     | 'titleDesc'
     | 'updatesDesc'
   >('default');
+
+  // Batch Multi-Select State
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [batchFeedback, setBatchFeedback] = useState<string | null>(null);
+
+  const toggleSelectTask = (taskId: string) => {
+    setSelectedTaskIds((prev) =>
+      prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]
+    );
+  };
+
+  const projectTags = useMemo(() => collectAllWorkspaceTags(tasks), [tasks]);
 
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
@@ -144,6 +214,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     statusFilter !== 'all' ||
     priorityFilter !== 'all' ||
     dateFilter !== 'all' ||
+    tagFilter !== 'ALL' ||
     taskSearchQuery.trim().length > 0 ||
     sortBy !== 'default';
 
@@ -151,6 +222,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     setStatusFilter('all');
     setPriorityFilter('all');
     setDateFilter('all');
+    setTagFilter('ALL');
     setTaskSearchQuery('');
     setSortBy('default');
   };
@@ -159,6 +231,14 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     let list = tasks.filter((task) => {
       if (statusFilter !== 'all' && task.status !== statusFilter) return false;
       if (priorityFilter !== 'all' && task.priority !== priorityFilter) return false;
+      if (
+        tagFilter !== 'ALL' &&
+        !(task.tags || []).some(
+          (tg) => tg.label.toLowerCase() === tagFilter.toLowerCase()
+        )
+      ) {
+        return false;
+      }
       if (dateFilter === 'overdue') {
         if (!(task.dueDate < todayStr && task.status !== 'completed')) return false;
       } else if (dateFilter === 'today') {
@@ -200,6 +280,9 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     };
 
     list = [...list].sort((a, b) => {
+      if (Boolean(a.pinned) !== Boolean(b.pinned)) {
+        return a.pinned ? -1 : 1;
+      }
       switch (sortBy) {
         case 'dueDateAsc':
           return a.dueDate.localeCompare(b.dueDate);
@@ -226,7 +309,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     });
 
     return list;
-  }, [tasks, statusFilter, priorityFilter, dateFilter, taskSearchQuery, sortBy, todayStr]);
+  }, [tasks, statusFilter, priorityFilter, dateFilter, tagFilter, taskSearchQuery, sortBy, todayStr]);
 
   // Collapsing state for task items in the project view
   const [collapsedTasks, setCollapsedTasks] = useState<Record<string, boolean>>({});
@@ -270,10 +353,28 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
   const handleSaveTaskEdit = (taskId: string) => {
     if (taskTitleDraft.trim()) {
+      const clampedInterval = Math.max(1, Number(taskRecurrenceIntervalDraft) || 1);
       onUpdateTaskMeta(taskId, {
         title: taskTitleDraft.trim(),
         description: taskDescDraft.trim(),
         priority: taskPriorityDraft,
+        recurrence:
+          taskRecurrenceFreqDraft === 'none'
+            ? { frequency: 'none' }
+            : {
+                frequency: taskRecurrenceFreqDraft,
+                interval:
+                  taskRecurrenceFreqDraft === 'custom' ? clampedInterval : undefined,
+                customUnit:
+                  taskRecurrenceFreqDraft === 'custom'
+                    ? taskRecurrenceUnitDraft
+                    : undefined,
+                intervalDays:
+                  taskRecurrenceFreqDraft === 'custom' &&
+                  taskRecurrenceUnitDraft === 'days'
+                    ? clampedInterval
+                    : undefined,
+              },
       });
     }
     setEditingTaskId(null);
@@ -360,6 +461,21 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 <Plus className="w-3.5 h-3.5" />
                 <span>{t.addTask}</span>
               </button>
+              {onTogglePinProject && (
+                <button
+                  type="button"
+                  data-testid="pin-project-header-btn"
+                  onClick={() => onTogglePinProject(project.id)}
+                  className={`h-9 px-3 rounded-lg border text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer ${
+                    project.pinned
+                      ? 'border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Pin className="w-3.5 h-3.5 shrink-0" />
+                  <span>{project.pinned ? t.unpinItemButton : t.pinItemButton}</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => exportProjectToPdf(project, tasks, lang, t)}
@@ -368,6 +484,22 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               >
                 <FileDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                 <span>{t.exportPdfButton}</span>
+              </button>
+              <button
+                type="button"
+                data-testid="export-project-csv-btn"
+                onClick={() =>
+                  exportTasksToExcelCsv(
+                    tasks,
+                    [project, ...allProjects],
+                    parentFolder ? [parentFolder, ...allFolders] : allFolders,
+                    `project_${project.id}_tasks.csv`
+                  )
+                }
+                className="h-9 px-3 rounded-lg border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50/70 dark:bg-emerald-950/40 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/50 inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+                <span>{t.exportExcelCsvButton}</span>
               </button>
               {onMoveProject && (
                 <button
@@ -435,15 +567,193 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             {t.tasksInProject} ({displayedTasks.length}{displayedTasks.length !== tasks.length ? ` / ${tasks.length}` : ''})
           </h2>
           {tasks.length > 0 && (
-            <button
-              type="button"
-              onClick={toggleAllTasksCollapse}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-            >
-              {allTasksCollapsed ? t.expandAll : t.collapseAll}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                data-testid="toggle-batch-select-btn"
+                onClick={() => {
+                  setIsBatchMode((v) => !v);
+                  setSelectedTaskIds([]);
+                }}
+                className={`h-8 px-3 rounded-lg text-xs font-semibold border inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  isBatchMode
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <ListChecks className="w-3.5 h-3.5" />
+                <span>
+                  {isBatchMode ? t.exitBatchSelectButton : t.batchSelectModeButton}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={toggleAllTasksCollapse}
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                {allTasksCollapsed ? t.expandAll : t.collapseAll}
+              </button>
+            </div>
           )}
         </div>
+
+        {/* Multi-Select Batch Action Bar */}
+        {isBatchMode && tasks.length > 0 && (
+          <div
+            data-testid="batch-action-bar"
+            className="bg-blue-50/90 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/80 rounded-xl p-3 space-y-2.5 shadow-xs"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span
+                  data-testid="batch-selected-count"
+                  className="px-2 py-0.5 rounded-md bg-blue-600 text-white text-xs font-mono font-bold"
+                >
+                  {selectedTaskIds.length} {t.selectedTasksCountLabel}
+                </span>
+                <button
+                  type="button"
+                  data-testid="batch-select-all-btn"
+                  onClick={() =>
+                    setSelectedTaskIds(displayedTasks.map((tsk) => tsk.id))
+                  }
+                  className="text-xs font-semibold text-blue-700 dark:text-blue-300 hover:underline cursor-pointer"
+                >
+                  {t.selectAllTasksButton}
+                </button>
+                {selectedTaskIds.length > 0 && (
+                  <button
+                    type="button"
+                    data-testid="batch-clear-selection-btn"
+                    onClick={() => setSelectedTaskIds([])}
+                    className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
+                  >
+                    {t.clearSelectionButton}
+                  </button>
+                )}
+              </div>
+
+              {batchFeedback && (
+                <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                  {batchFeedback}
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-blue-200/60 dark:border-blue-800/50">
+              {onBatchUpdateTasks && (
+                <>
+                  <select
+                    data-testid="batch-status-select"
+                    disabled={selectedTaskIds.length === 0}
+                    defaultValue=""
+                    onChange={(e) => {
+                      const val = e.target.value as TaskStatus;
+                      if (!val) return;
+                      onBatchUpdateTasks(selectedTaskIds, { status: val });
+                      e.target.value = '';
+                      setBatchFeedback(t.batchUpdatedToast);
+                      setTimeout(() => setBatchFeedback(null), 2200);
+                    }}
+                    className="h-8 px-2.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 text-xs font-medium text-slate-800 dark:text-slate-200 disabled:opacity-50"
+                  >
+                    <option value="">{t.batchApplyStatusLabel}</option>
+                    <option value="todo">{t.statusTodo}</option>
+                    <option value="in_progress">{t.statusInProgress}</option>
+                    <option value="review">{t.statusReview}</option>
+                    <option value="completed">{t.statusCompleted}</option>
+                  </select>
+
+                  <select
+                    data-testid="batch-priority-select"
+                    disabled={selectedTaskIds.length === 0}
+                    defaultValue=""
+                    onChange={(e) => {
+                      const val = e.target.value as TaskPriority;
+                      if (!val) return;
+                      onBatchUpdateTasks(selectedTaskIds, { priority: val });
+                      e.target.value = '';
+                      setBatchFeedback(t.batchUpdatedToast);
+                      setTimeout(() => setBatchFeedback(null), 2200);
+                    }}
+                    className="h-8 px-2.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 text-xs font-medium text-slate-800 dark:text-slate-200 disabled:opacity-50"
+                  >
+                    <option value="">{t.batchApplyPriorityLabel}</option>
+                    <option value="low">{t.priorityLow}</option>
+                    <option value="medium">{t.priorityMedium}</option>
+                    <option value="high">{t.priorityHigh}</option>
+                    <option value="critical">{t.priorityCritical}</option>
+                  </select>
+
+                  <div className="inline-flex items-center gap-1">
+                    <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                      {t.batchApplyDueDateLabel}:
+                    </span>
+                    <input
+                      type="date"
+                      data-testid="batch-duedate-input"
+                      disabled={selectedTaskIds.length === 0}
+                      onChange={(e) => {
+                        if (!e.target.value) return;
+                        onBatchUpdateTasks(selectedTaskIds, {
+                          dueDate: e.target.value,
+                        });
+                        setBatchFeedback(t.batchUpdatedToast);
+                        setTimeout(() => setBatchFeedback(null), 2200);
+                      }}
+                      className="h-8 px-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 text-xs font-mono text-slate-800 dark:text-slate-200 disabled:opacity-50"
+                    />
+                  </div>
+
+                  {allProjects.length > 1 && (
+                    <select
+                      data-testid="batch-move-select"
+                      disabled={selectedTaskIds.length === 0}
+                      defaultValue=""
+                      onChange={(e) => {
+                        const targetId = e.target.value;
+                        if (!targetId) return;
+                        onBatchUpdateTasks(selectedTaskIds, {
+                          targetProjectId: targetId,
+                        });
+                        e.target.value = '';
+                        setSelectedTaskIds([]);
+                        setBatchFeedback(t.batchUpdatedToast);
+                        setTimeout(() => setBatchFeedback(null), 2200);
+                      }}
+                      className="h-8 px-2.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 text-xs font-medium text-slate-800 dark:text-slate-200 disabled:opacity-50"
+                    >
+                      <option value="">{t.batchMoveToGroupLabel}</option>
+                      {allProjects
+                        .filter((p) => p.id !== project.id)
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {resolveLocalizedText(p.name, p.localizedName, lang)}
+                          </option>
+                        ))}
+                    </select>
+                  )}
+                </>
+              )}
+
+              {onBatchDeleteTasks && (
+                <button
+                  type="button"
+                  data-testid="batch-delete-btn"
+                  disabled={selectedTaskIds.length === 0}
+                  onClick={() => {
+                    onBatchDeleteTasks(selectedTaskIds);
+                    setSelectedTaskIds([]);
+                  }}
+                  className="h-8 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{t.batchDeleteSelectedButton}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* SEARCH, SORT & FILTER TOOLBAR */}
         {tasks.length > 0 && (
@@ -627,6 +937,51 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   );
                 })}
               </div>
+
+              {/* Custom Tag Filters */}
+              {projectTags.length > 0 && (
+                <div
+                  data-testid="project-tag-filter"
+                  className="flex flex-wrap items-center gap-1.5"
+                >
+                  <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider min-w-[55px] inline-flex items-center gap-1">
+                    <Tag className="w-3 h-3" />
+                    <span>{t.filterByTagLabel}:</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setTagFilter('ALL')}
+                    className={`px-2 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                      tagFilter === 'ALL'
+                        ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {t.allTagsFilter}
+                  </button>
+                  {projectTags.map((tg) => {
+                    const isSelected =
+                      tagFilter.toLowerCase() === tg.label.toLowerCase();
+                    return (
+                      <button
+                        key={tg.id}
+                        type="button"
+                        onClick={() =>
+                          setTagFilter(isSelected ? 'ALL' : tg.label)
+                        }
+                        className={`px-2 py-0.5 text-xs font-semibold rounded-md border transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'ring-2 ring-blue-500 ' +
+                              (TAG_PILL_STYLES[tg.color] || TAG_PILL_STYLES.blue)
+                            : TAG_PILL_STYLES[tg.color] || TAG_PILL_STYLES.blue
+                        }`}
+                      >
+                        {tg.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -726,11 +1081,75 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                         })}
                       </div>
                     </div>
+                    <div>
+                      <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+                        <Repeat className="w-3.5 h-3.5 text-violet-500" />
+                        <span>{t.recurrenceLabel}</span>
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          data-testid={`inline-task-recurrence-select-${task.id}`}
+                          value={taskRecurrenceFreqDraft}
+                          onChange={(e) =>
+                            setTaskRecurrenceFreqDraft(
+                              e.target.value as RecurrenceFrequency
+                            )
+                          }
+                          aria-label={t.recurrenceLabel}
+                          className="h-9 px-3 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                        >
+                          <option value="none">{t.recurrenceNone}</option>
+                          <option value="daily">{t.recurrenceDaily}</option>
+                          <option value="weekly">{t.recurrenceWeekly}</option>
+                          <option value="monthly">{t.recurrenceMonthly}</option>
+                          <option value="yearly">{t.recurrenceYearly}</option>
+                          <option value="custom">{t.recurrenceCustom}</option>
+                        </select>
+                        {taskRecurrenceFreqDraft === 'custom' && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-slate-500 dark:text-slate-400">
+                              {t.recurrenceIntervalDaysLabel}:
+                            </span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={365}
+                              data-testid={`inline-task-recurrence-interval-input-${task.id}`}
+                              value={taskRecurrenceIntervalDraft}
+                              onChange={(e) =>
+                                setTaskRecurrenceIntervalDraft(
+                                  Math.max(1, Number(e.target.value) || 1)
+                                )
+                              }
+                              aria-label={t.recurrenceIntervalDaysLabel}
+                              className="w-20 h-9 px-2.5 text-xs font-mono font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                            />
+                            <select
+                              data-testid={`inline-task-recurrence-unit-select-${task.id}`}
+                              value={taskRecurrenceUnitDraft}
+                              onChange={(e) =>
+                                setTaskRecurrenceUnitDraft(
+                                  e.target.value as RecurrenceCustomUnit
+                                )
+                              }
+                              aria-label={t.recurrenceCustom}
+                              className="h-9 px-2.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                            >
+                              <option value="days">{t.recurrenceUnitDays}</option>
+                              <option value="weeks">{t.recurrenceUnitWeeks}</option>
+                              <option value="months">{t.recurrenceUnitMonths}</option>
+                              <option value="years">{t.recurrenceUnitYears}</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                     <div className="flex items-center justify-end gap-2">
                       <button
                         type="button"
+                        data-testid={`inline-task-save-btn-${task.id}`}
                         onClick={() => handleSaveTaskEdit(task.id)}
-                        className="h-9 px-3.5 bg-blue-600 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1"
+                        className="h-9 px-3.5 bg-blue-600 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1 cursor-pointer"
                       >
                         <Check className="w-3.5 h-3.5" />
                         {t.saveChanges}
@@ -738,7 +1157,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       <button
                         type="button"
                         onClick={() => setEditingTaskId(null)}
-                        className="h-9 px-3 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg inline-flex items-center gap-1"
+                        className="h-9 px-3 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg inline-flex items-center gap-1 cursor-pointer"
                       >
                         <X className="w-3.5 h-3.5" />
                         {t.cancel}
@@ -749,6 +1168,15 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   <>
                     <div className="flex items-start justify-between gap-4 mb-2">
                       <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                        {isBatchMode && (
+                          <input
+                            type="checkbox"
+                            data-testid={`batch-select-checkbox-${task.id}`}
+                            checked={selectedTaskIds.includes(task.id)}
+                            onChange={() => toggleSelectTask(task.id)}
+                            className="mt-1.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
+                          />
+                        )}
                         <button
                           type="button"
                           onClick={() => toggleTaskCollapse(task.id)}
@@ -763,6 +1191,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                         </button>
                         <button
                           type="button"
+                          data-testid={`open-task-btn-${task.id}`}
                           onClick={() => onSelectNode({ type: 'task', id: task.id })}
                           className="text-start flex-1 min-w-0 cursor-pointer group"
                         >
@@ -776,6 +1205,15 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                             <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">
                               {t.dueDateLabel}: {task.dueDate}
                             </span>
+                            {task.recurrence && task.recurrence.frequency !== 'none' && (
+                              <span
+                                data-testid={`task-card-recurrence-badge-${task.id}`}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 text-[10px] font-mono font-semibold border border-violet-200 dark:border-violet-800/70"
+                              >
+                                <Repeat className="w-2.5 h-2.5" />
+                                <span>{formatRecurrenceSummary(task.recurrence, t)}</span>
+                              </span>
+                            )}
                             {collapsedTasks[task.id] && (
                               <>
                                 <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
@@ -788,6 +1226,21 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                           <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400">
                             {taskTitle}
                           </h3>
+                          {task.tags && task.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                              {task.tags.map((tg) => (
+                                <span
+                                  key={tg.id}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
+                                    TAG_PILL_STYLES[tg.color] || TAG_PILL_STYLES.blue
+                                  }`}
+                                >
+                                  <Tag className="w-2.5 h-2.5" />
+                                  <span>{tg.label}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           {!collapsedTasks[task.id] && taskDesc && (
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
                               {taskDesc}
@@ -797,6 +1250,22 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
+                        {onTogglePinTask && (
+                          <button
+                            type="button"
+                            data-testid={`pin-task-card-btn-${task.id}`}
+                            onClick={() => onTogglePinTask(task.id)}
+                            title={task.pinned ? t.unpinItemButton : t.pinItemButton}
+                            aria-label={task.pinned ? t.unpinItemButton : t.pinItemButton}
+                            className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                              task.pinned
+                                ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/40'
+                                : 'text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            <Pin className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         {onMoveTask && (
                           <button
                             type="button"
@@ -811,14 +1280,26 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                         )}
                         <button
                           type="button"
+                          data-testid={`inline-edit-task-btn-${task.id}`}
                           onClick={() => {
                             setEditingTaskId(task.id);
                             setTaskTitleDraft(taskTitle);
                             setTaskDescDraft(taskDesc);
                             setTaskPriorityDraft(task.priority);
+                            setTaskRecurrenceFreqDraft(
+                              task.recurrence?.frequency || 'none'
+                            );
+                            setTaskRecurrenceIntervalDraft(
+                              task.recurrence?.interval ??
+                                task.recurrence?.intervalDays ??
+                                1
+                            );
+                            setTaskRecurrenceUnitDraft(
+                              task.recurrence?.customUnit || 'days'
+                            );
                           }}
                           aria-label={`${t.editTask} ${taskTitle}`}
-                          className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                          className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>

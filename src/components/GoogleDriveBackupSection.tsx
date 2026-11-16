@@ -30,6 +30,7 @@ import {
   ScannedBackupCandidate,
 } from '../utils/localFolderSync';
 import {
+  checkNewerBackupOnDrive,
   createDriveFolder,
   DriveAuthUserInfo,
   DriveFolderEntry,
@@ -618,6 +619,60 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
     }
   };
 
+  const handleToggleAutoSync = () => {
+    const nextEnabled = driveMeta.autoSyncOnChange === false;
+    const saved = saveGoogleDriveMeta({
+      ...driveMeta,
+      autoSyncOnChange: nextEnabled,
+    });
+    setDriveMeta(saved);
+  };
+
+  const handleCheckNewerBackupOnDrive = async () => {
+    let token = getGoogleDriveAccessToken();
+    if (!token) {
+      token = await handleSignIn();
+      if (!token) return;
+    }
+    const targetId = driveMeta.folderId || 'root';
+    const targetName = driveMeta.folderName || t.myDriveRootLabel;
+    setIsScanningDrive(true);
+    try {
+      const checkRes = await checkNewerBackupOnDrive(
+        token,
+        targetId,
+        targetName,
+        driveMeta.lastBackupAt
+      );
+      if (
+        checkRes.scanResult.hasBackup &&
+        checkRes.scanResult.backup &&
+        checkRes.isNewer
+      ) {
+        setPendingDriveRestoreConfirm({
+          folderId: targetId,
+          folderName: targetName,
+          backup: checkRes.scanResult.backup,
+          existingFileId: checkRes.scanResult.existingAutosaveFileId,
+        });
+      } else if (checkRes.scanResult.hasBackup && checkRes.scanResult.backup) {
+        setDriveFeedback({
+          type: 'success',
+          message: t.driveUpToDateToast,
+        });
+      } else {
+        setDriveFeedback({
+          type: 'error',
+          message: t.noBackupInFolderNote,
+        });
+      }
+    } catch (err) {
+      handleAuthError(err);
+    } finally {
+      setIsScanningDrive(false);
+    }
+  };
+
   const handleConfirmRestoreFromDrive = () => {
     if (!pendingDriveRestoreConfirm) return;
     const { folderId, folderName, backup, existingFileId } =
@@ -633,6 +688,9 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
       notifications: Array.isArray(backup.workspace.notifications)
         ? backup.workspace.notifications
         : [],
+      templates: Array.isArray(backup.workspace.templates)
+        ? backup.workspace.templates
+        : undefined,
     };
 
     if (backup.preferences) {
@@ -666,6 +724,10 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
       lastBackupAt: backup.exportedAt || new Date().toISOString(),
       lastBackupFileId: existingFileId || driveMeta.lastBackupFileId,
       lastBackupBytes: backup.byteLength,
+      autoSyncOnChange:
+        driveMeta.autoSyncOnChange !== undefined
+          ? driveMeta.autoSyncOnChange
+          : true,
     });
     setDriveMeta(nextMeta);
     setPendingDriveRestoreConfirm(null);
@@ -839,6 +901,21 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
 
             <button
               type="button"
+              data-testid="gdrive-check-newer-btn"
+              onClick={handleCheckNewerBackupOnDrive}
+              disabled={isScanningDrive}
+              className="h-9 px-3.5 rounded-lg text-xs font-semibold border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100/80 dark:hover:bg-blue-900/50 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 shrink-0 ${
+                  isScanningDrive ? 'animate-spin' : ''
+                }`}
+              />
+              <span>{t.driveCheckNewerBackupButton}</span>
+            </button>
+
+            <button
+              type="button"
               data-testid="google-drive-signout-btn"
               onClick={handleSignOut}
               className="h-9 px-3 rounded-lg text-xs font-semibold border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -849,6 +926,64 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
           </div>
         </div>
       )}
+
+      {/* Automatic Google Drive Background Sync & Conflict Check Controls */}
+      <div className="rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 p-3.5 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+              {t.driveAutoSyncLabel}
+            </span>
+            {driveMeta.autoSyncOnChange !== false && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 text-blue-700 dark:text-blue-300">
+                {t.driveAutoSyncedBadge}
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+            {t.driveAutoSyncDesc}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {!hasActiveToken && (
+            <button
+              type="button"
+              data-testid="gdrive-check-newer-btn"
+              onClick={handleCheckNewerBackupOnDrive}
+              disabled={isScanningDrive}
+              className="h-8 px-3 rounded-lg text-xs font-semibold border border-blue-200 dark:border-blue-800/70 bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 shrink-0 ${
+                  isScanningDrive ? 'animate-spin' : ''
+                }`}
+              />
+              <span>{t.driveCheckNewerBackupButton}</span>
+            </button>
+          )}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={driveMeta.autoSyncOnChange !== false}
+            data-testid="gdrive-autosync-toggle"
+            onClick={handleToggleAutoSync}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+              driveMeta.autoSyncOnChange !== false
+                ? 'bg-blue-600'
+                : 'bg-slate-300 dark:bg-slate-700'
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${
+                driveMeta.autoSyncOnChange !== false
+                  ? 'translate-x-5 rtl:-translate-x-5'
+                  : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
 
       {/* Insufficient Google Drive Scope Troubleshooting Card (403 ACCESS_TOKEN_SCOPE_INSUFFICIENT) */}
       {insufficientScopeError && (

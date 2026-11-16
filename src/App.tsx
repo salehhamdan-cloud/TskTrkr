@@ -20,8 +20,12 @@ import {
   LanguageCode,
   PhotoTargetRef,
   SelectedSidebarNode,
+  TagColor,
   TaskAttachment,
   TaskItem,
+  TaskPriority,
+  TaskRecurrenceRule,
+  TaskStatus,
   TrashItem,
   WorkspaceState,
 } from './types/task';
@@ -31,14 +35,20 @@ import {
   addPhotoToTodoInTask,
   addPhotoToUpdateInTask,
   addSubTodoToTask,
+  addTagToTask,
   addTodoToTask,
   addUpdateToTask,
   annotatePhotoInTask,
   appendNotification,
+  batchMoveTasksToTrash,
+  batchUpdateTasks,
   clearAllNotifications,
+  completeAndSpawnRecurringTask,
   computeProjectMetrics,
   createFolder,
   createProject,
+  createTemplateFromTask,
+  deleteTaskTemplate,
   deleteTrashItemPermanently,
   deriveTaskStatus,
   editAttachmentInTask,
@@ -58,8 +68,12 @@ import {
   moveTaskToTrash,
   moveTodoToTrash,
   moveUpdateToTrash,
+  removeTagFromTask,
+  rescheduleTaskDueDate,
   restoreTrashItem,
   searchWorkspace,
+  togglePinProject,
+  togglePinTask,
   toggleSubTodoInTask,
   toggleTodoInTask,
   updateFolder,
@@ -83,11 +97,17 @@ import {
   LocalFolderSyncMeta,
   overwriteLocalSaveFile,
 } from './utils/localFolderSync';
+import {
+  getGoogleDriveAccessToken,
+  loadGoogleDriveMeta,
+  uploadOrOverwriteBackupInDriveFolder,
+} from './utils/googleDriveBackup';
 import { SidebarTree } from './components/SidebarTree';
 import { FolderDetailView } from './components/FolderDetailView';
 import { ProjectDetailView } from './components/ProjectDetailView';
 import { TaskDetailPanel } from './components/TaskDetailPanel';
 import { DashboardView } from './components/DashboardView';
+import { CalendarTimelineView } from './components/CalendarTimelineView';
 import { SettingsView } from './components/SettingsView';
 import { NewTaskModal } from './components/NewTaskModal';
 import { PriorityBadge } from './components/PriorityBadge';
@@ -246,9 +266,11 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const gdriveAutoSyncTimerRef = useRef<number | null>(null);
+
   const commitWorkspace = (
     updater: (prev: WorkspaceState) => WorkspaceState,
-    options?: { skipLocalFolderOverwrite?: boolean }
+    options?: { skipLocalFolderOverwrite?: boolean; skipGoogleDriveAutoSync?: boolean }
   ) => {
     setWorkspace((prev) => {
       const updated = updater(prev);
@@ -268,6 +290,33 @@ export default function App() {
             setLocalFolderMeta(updatedFolderMeta);
           }
         );
+      }
+
+      // Debounced background Google Drive Auto-Backup on Change
+      const gdriveMeta = loadGoogleDriveMeta();
+      const gdriveToken = getGoogleDriveAccessToken();
+      if (
+        !options?.skipGoogleDriveAutoSync &&
+        gdriveMeta.isConfigured &&
+        gdriveMeta.autoSyncOnChange !== false &&
+        gdriveToken
+      ) {
+        if (gdriveAutoSyncTimerRef.current) {
+          window.clearTimeout(gdriveAutoSyncTimerRef.current);
+        }
+        gdriveAutoSyncTimerRef.current = window.setTimeout(() => {
+          uploadOrOverwriteBackupInDriveFolder(
+            gdriveToken,
+            gdriveMeta.folderId || 'root',
+            gdriveMeta.folderName || 'My Drive',
+            withReminders,
+            lang,
+            isDarkMode,
+            gdriveMeta.lastBackupFileId
+          ).catch(() => {
+            // Silent background auto-sync; errors are recorded in status if user syncs manually
+          });
+        }, 2200);
       }
 
       return withReminders;
@@ -491,10 +540,45 @@ export default function App() {
         | 'dueTime'
         | 'title'
         | 'description'
+        | 'recurrence'
       >
     >
   ) => {
     commitWorkspace((prev) => {
+      const existingTask = prev.tasks.find((tsk) => tsk.id === taskId);
+      const wasCompleted = existingTask?.status === 'completed';
+
+      // If transitioning to completed and task has a recurrence rule, auto-spawn next occurrence
+      if (
+        existingTask &&
+        !wasCompleted &&
+        (patch.status === 'completed' ||
+          (patch.manualProgress === 100 && existingTask.todos.length === 0)) &&
+        existingTask.recurrence &&
+        existingTask.recurrence.frequency !== 'none'
+      ) {
+        const res = completeAndSpawnRecurringTask(prev, taskId);
+        const taskTitle = resolveLocalizedText(
+          existingTask.title,
+          existingTask.localizedTitle,
+          lang
+        );
+        if (res.spawnedTask) {
+          showToast(
+            t.recurringNextSpawnedToast,
+            `${taskTitle} (${res.spawnedTask.dueDate})`,
+            { type: 'task', id: res.spawnedTask.id }
+          );
+          return appendNotification(res.state, {
+            category: 'reminder',
+            section: 'task',
+            title: t.recurringNextSpawnedToast,
+            message: `${taskTitle} — ${t.dueDateLabel}: ${res.spawnedTask.dueDate}`,
+            targetNode: { type: 'task', id: res.spawnedTask.id },
+          });
+        }
+      }
+
       let updatedTaskTitle = '';
       const nextTasks = prev.tasks.map((tsk) => {
         if (tsk.id !== taskId) return tsk;
@@ -635,6 +719,130 @@ export default function App() {
   };
 
   // ============================================================================
+  // CALENDAR RESCHEDULE, PINNING, TEMPLATES, TAGS & BATCH ACTIONS
+  // ============================================================================
+  const handleRescheduleTask = (taskId: string, newDueDate: string) => {
+    const targetTask = workspace.tasks.find((tsk) => tsk.id === taskId);
+    if (!targetTask) return;
+    const taskTitle = resolveLocalizedText(
+      targetTask.title,
+      targetTask.localizedTitle,
+      lang
+    );
+    commitWorkspace((prev) => {
+      const next = rescheduleTaskDueDate(prev, taskId, newDueDate);
+      showToast(
+        `${t.calendarTaskRescheduledToast}: ${newDueDate}`,
+        taskTitle,
+        { type: 'task', id: taskId }
+      );
+      return appendNotification(next, {
+        category: 'reminder',
+        section: 'task',
+        title: `${t.calendarTaskRescheduledToast}: ${newDueDate}`,
+        message: taskTitle,
+        targetNode: { type: 'task', id: taskId },
+      });
+    });
+  };
+
+  const handleTogglePinProject = (projectId: string) => {
+    commitWorkspace((prev) => togglePinProject(prev, projectId));
+  };
+
+  const handleTogglePinTask = (taskId: string) => {
+    commitWorkspace((prev) => togglePinTask(prev, taskId));
+  };
+
+  const handleSaveTaskAsTemplate = (
+    taskOrId: TaskItem | string,
+    customName?: string
+  ) => {
+    const targetTask =
+      typeof taskOrId === 'string'
+        ? workspace.tasks.find((tsk) => tsk.id === taskOrId)
+        : taskOrId;
+    if (!targetTask) return;
+    commitWorkspace((prev) => {
+      const res = createTemplateFromTask(prev, targetTask, customName);
+      showToast(t.templateSavedToast, res.createdTemplate.name, {
+        type: 'task',
+        id: targetTask.id,
+      });
+      return res.state;
+    });
+  };
+
+  const handleDeleteTemplate = (templateId: string) => {
+    commitWorkspace((prev) => deleteTaskTemplate(prev, templateId));
+  };
+
+  const handleAddTagToTask = (taskId: string, label: string, color: TagColor) => {
+    commitWorkspace((prev) => ({
+      ...prev,
+      tasks: prev.tasks.map((tsk) =>
+        tsk.id === taskId ? addTagToTask(tsk, label, color) : tsk
+      ),
+    }));
+  };
+
+  const handleRemoveTagFromTask = (taskId: string, tagId: string) => {
+    commitWorkspace((prev) => ({
+      ...prev,
+      tasks: prev.tasks.map((tsk) =>
+        tsk.id === taskId ? removeTagFromTask(tsk, tagId) : tsk
+      ),
+    }));
+  };
+
+  const handleBatchUpdateTasks = (
+    taskIds: string[],
+    patch: {
+      status?: TaskStatus;
+      priority?: TaskPriority;
+      dueDate?: string;
+      projectId?: string;
+      targetProjectId?: string;
+    }
+  ) => {
+    if (taskIds.length === 0) return;
+    commitWorkspace((prev) => {
+      const next = batchUpdateTasks(prev, taskIds, {
+        status: patch.status,
+        priority: patch.priority,
+        dueDate: patch.dueDate,
+        targetProjectId: patch.targetProjectId || patch.projectId,
+      });
+      showToast(
+        `${t.notifUpdatedLabel} (${taskIds.length})`,
+        `${taskIds.length} ${t.selectedTasksCountLabel}`
+      );
+      return next;
+    });
+  };
+
+  const handleBatchDeleteTasks = (taskIds: string[]) => {
+    if (taskIds.length === 0) return;
+    setConfirmDeleteState({
+      isOpen: true,
+      itemName: `${taskIds.length} ${t.selectedTasksCountLabel}`,
+      itemTypeBadge: t.taskTypeLabel,
+      isPermanent: false,
+      onConfirm: () => {
+        commitWorkspace((prev) => {
+          const next = batchMoveTasksToTrash(prev, taskIds);
+          showToast(
+            t.notifMovedToTrashLabel,
+            `${taskIds.length} ${t.selectedTasksCountLabel}`,
+            { type: 'trash' }
+          );
+          return next;
+        });
+      },
+    });
+  };
+
+  // ============================================================================
   // TO-DO & SUB-TO-DO CRUD (WITH NOTIFICATION & CONFIRM DELETE -> TRASH)
   // ============================================================================
   const handleAddTodo = (
@@ -740,6 +948,8 @@ export default function App() {
 
   const handleToggleTodo = (taskId: string, todoId: string) => {
     commitWorkspace((prev) => {
+      const oldTask = prev.tasks.find((t) => t.id === taskId);
+      const wasCompleted = oldTask?.status === 'completed';
       const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId ? toggleTodoInTask(tsk, todoId) : tsk
       );
@@ -748,18 +958,35 @@ export default function App() {
       const todoTitle = targetTodo
         ? resolveLocalizedText(targetTodo.title, targetTodo.localizedTitle, lang)
         : '';
-      return appendNotification(
-        { ...prev, tasks: nextTasks },
-        {
-          category: 'change',
-          section: 'todo',
-          title: `${
-            targetTodo?.completed ? t.notifCompletedLabel : t.notifUpdatedLabel
-          }: ${t.todoTypeLabel}`,
-          message: todoTitle,
-          targetNode: { type: 'task', id: taskId },
+
+      let nextState: WorkspaceState = { ...prev, tasks: nextTasks };
+      if (
+        targetTask &&
+        !wasCompleted &&
+        targetTask.status === 'completed' &&
+        targetTask.recurrence &&
+        targetTask.recurrence.frequency !== 'none'
+      ) {
+        const spawnedRes = completeAndSpawnRecurringTask(nextState, taskId);
+        nextState = spawnedRes.state;
+        if (spawnedRes.spawnedTask) {
+          showToast(
+            t.recurringNextSpawnedToast,
+            `${targetTask.title} (${spawnedRes.spawnedTask.dueDate})`,
+            { type: 'task', id: spawnedRes.spawnedTask.id }
+          );
         }
-      );
+      }
+
+      return appendNotification(nextState, {
+        category: 'change',
+        section: 'todo',
+        title: `${
+          targetTodo?.completed ? t.notifCompletedLabel : t.notifUpdatedLabel
+        }: ${t.todoTypeLabel}`,
+        message: todoTitle,
+        targetNode: { type: 'task', id: taskId },
+      });
     });
   };
 
@@ -814,6 +1041,8 @@ export default function App() {
 
   const handleToggleSubTodo = (taskId: string, todoId: string, subTodoId: string) => {
     commitWorkspace((prev) => {
+      const existingTask = prev.tasks.find((t) => t.id === taskId);
+      const wasCompleted = existingTask?.status === 'completed';
       const nextTasks = prev.tasks.map((tsk) =>
         tsk.id === taskId ? toggleSubTodoInTask(tsk, todoId, subTodoId) : tsk
       );
@@ -824,18 +1053,35 @@ export default function App() {
       const subTitle = targetSub
         ? resolveLocalizedText(targetSub.title, targetSub.localizedTitle, lang)
         : '';
-      return appendNotification(
-        { ...prev, tasks: nextTasks },
-        {
-          category: 'change',
-          section: 'subtodo',
-          title: `${
-            targetSub?.completed ? t.notifCompletedLabel : t.notifUpdatedLabel
-          }: ${t.subTodoTypeLabel}`,
-          message: subTitle,
-          targetNode: { type: 'task', id: taskId },
+
+      let nextState: WorkspaceState = { ...prev, tasks: nextTasks };
+      if (
+        targetTask &&
+        !wasCompleted &&
+        targetTask.status === 'completed' &&
+        targetTask.recurrence &&
+        targetTask.recurrence.frequency !== 'none'
+      ) {
+        const spawnedRes = completeAndSpawnRecurringTask(nextState, taskId);
+        nextState = spawnedRes.state;
+        if (spawnedRes.spawnedTask) {
+          showToast(
+            t.recurringNextSpawnedToast,
+            `${targetTask.title} (${spawnedRes.spawnedTask.dueDate})`,
+            { type: 'task', id: spawnedRes.spawnedTask.id }
+          );
         }
-      );
+      }
+
+      return appendNotification(nextState, {
+        category: 'change',
+        section: 'subtodo',
+        title: `${
+          targetSub?.completed ? t.notifCompletedLabel : t.notifUpdatedLabel
+        }: ${t.subTodoTypeLabel}`,
+        message: subTitle,
+        targetNode: { type: 'task', id: taskId },
+      });
     });
   };
 
@@ -1466,6 +1712,8 @@ export default function App() {
                 setMoveModalTarget({ type: 'task', taskId })
               }
               onDeleteTask={handleDeleteTask}
+              onTogglePinProject={handleTogglePinProject}
+              onTogglePinTask={handleTogglePinTask}
             />
           </div>
         </div>
@@ -1521,6 +1769,8 @@ export default function App() {
                     setMoveModalTarget({ type: 'task', taskId });
                   }}
                   onDeleteTask={handleDeleteTask}
+                  onTogglePinProject={handleTogglePinProject}
+                  onTogglePinTask={handleTogglePinTask}
                 />
               </div>
             </div>
@@ -1553,6 +1803,9 @@ export default function App() {
                   notifications: Array.isArray(nextState.notifications)
                     ? nextState.notifications
                     : [],
+                  templates: Array.isArray(nextState.templates)
+                    ? nextState.templates
+                    : [],
                 };
                 commitWorkspace(() => normalizedReplacement, options);
               }}
@@ -1583,6 +1836,24 @@ export default function App() {
             />
           )}
 
+          {selectedNode.type === 'calendar' && (
+            <CalendarTimelineView
+              tasks={workspace.tasks}
+              projects={workspace.projects}
+              lang={lang}
+              t={t}
+              onSelectNode={setSelectedNode}
+              onRescheduleTask={handleRescheduleTask}
+              onOpenNewTaskModal={() =>
+                setNewTaskContext({
+                  isOpen: true,
+                  folderId: activeFolder?.id || activeProject?.folderId,
+                  projectId: activeProject?.id || activeTask?.projectId,
+                })
+              }
+            />
+          )}
+
           {selectedNode.type === 'dashboard' && (
             <DashboardView
               projects={workspace.projects}
@@ -1591,6 +1862,8 @@ export default function App() {
               lang={lang}
               t={t}
               onSelectNode={setSelectedNode}
+              onTogglePinProject={handleTogglePinProject}
+              onTogglePinTask={handleTogglePinTask}
             />
           )}
 
@@ -1612,6 +1885,7 @@ export default function App() {
                 setMoveModalTarget({ type: 'project', projectId })
               }
               onDeleteProject={handleDeleteProject}
+              onTogglePinProject={handleTogglePinProject}
             />
           )}
 
@@ -1621,6 +1895,8 @@ export default function App() {
               parentFolder={workspace.folders.find(
                 (f) => f.id === activeProject.folderId
               )}
+              allProjects={workspace.projects}
+              allFolders={workspace.folders}
               tasks={workspace.tasks.filter(
                 (tsk) => tsk.projectId === activeProject.id
               )}
@@ -1644,6 +1920,10 @@ export default function App() {
               }
               onUpdateTaskMeta={handleUpdateTaskMeta}
               onDeleteTask={handleDeleteTask}
+              onTogglePinProject={handleTogglePinProject}
+              onTogglePinTask={handleTogglePinTask}
+              onBatchUpdateTasks={handleBatchUpdateTasks}
+              onBatchDeleteTasks={handleBatchDeleteTasks}
             />
           )}
 
@@ -1688,6 +1968,10 @@ export default function App() {
                 setMoveModalTarget({ type: 'task', taskId })
               }
               onDeleteTask={handleDeleteTask}
+              onTogglePinTask={handleTogglePinTask}
+              onSaveTaskAsTemplate={handleSaveTaskAsTemplate}
+              onAddTagToTask={handleAddTagToTask}
+              onRemoveTagFromTask={handleRemoveTagFromTask}
             />
           )}
         </main>
@@ -1831,12 +2115,14 @@ export default function App() {
         isOpen={newTaskContext.isOpen}
         folders={workspace.folders}
         projects={workspace.projects}
+        templates={workspace.templates || []}
         defaultFolderId={newTaskContext.folderId}
         defaultProjectId={newTaskContext.projectId}
         lang={lang}
         t={t}
         onClose={() => setNewTaskContext({ isOpen: false })}
         onCreateTask={handleCreateTask}
+        onDeleteTemplate={handleDeleteTemplate}
       />
 
       {/* Move Task / Group Modal */}

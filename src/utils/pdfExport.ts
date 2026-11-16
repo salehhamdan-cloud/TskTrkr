@@ -1,11 +1,22 @@
-import { LanguageCode, ProjectGroupItem, TaskAttachment, TaskItem } from '../types/task';
+import {
+  FolderItem,
+  LanguageCode,
+  ProjectGroupItem,
+  TaskAttachment,
+  TaskItem,
+} from '../types/task';
 import {
   getPriorityLabel,
   getStatusLabel,
   resolveLocalizedText,
   TranslationDictionary,
 } from '../i18n/translations';
-import { calculateTaskProgress, formatDateTimeStamp, formatFileSize } from './taskLogic';
+import {
+  buildTasksCsvReport,
+  calculateTaskProgress,
+  formatDateTimeStamp,
+  formatFileSize,
+} from './taskLogic';
 
 /**
  * Computes aspect-fit drawing coordinates (x, y, width, height) for rendering
@@ -715,3 +726,137 @@ export async function exportProjectToPdf(
     `project_${project.id}_report.pdf`
   );
 }
+
+/**
+ * Exports a full Folder (with all its Project Groups, Tasks, Progress Bars, To-Dos, Updates, and Photo Thumbnails)
+ * into a single combined PDF report.
+ */
+export async function exportFolderToPdf(
+  folder: FolderItem,
+  projects: ProjectGroupItem[],
+  tasks: TaskItem[],
+  lang: LanguageCode,
+  t: TranslationDictionary
+): Promise<void> {
+  const folderTitle = resolveLocalizedText(folder.name, folder.localizedName, lang);
+  const avgProgress =
+    tasks.length > 0
+      ? Math.round(tasks.reduce((sum, tsk) => sum + calculateTaskProgress(tsk), 0) / tasks.length)
+      : 0;
+
+  const lines: ReportLine[] = [];
+
+  lines.push({
+    text: `${t.projectsInFolder} (${projects.length}) · ${tasks.length} ${t.taskTypeLabel}`,
+    size: 22,
+    weight: 'bold',
+    color: '#0F172A',
+    dividerBefore: true,
+  });
+
+  for (const proj of projects) {
+    const projTitle = resolveLocalizedText(proj.name, proj.localizedName, lang);
+    const projTasks = tasks.filter((tsk) => tsk.projectId === proj.id);
+    const projAvg =
+      projTasks.length > 0
+        ? Math.round(
+            projTasks.reduce((sum, tsk) => sum + calculateTaskProgress(tsk), 0) /
+              projTasks.length
+          )
+        : 0;
+
+    lines.push({
+      text: `${projTitle} — ${projAvg}% (${projTasks.length} tasks)`,
+      size: 21,
+      weight: 'bold',
+      color: '#1E293B',
+      progressBar: projAvg,
+      dividerBefore: true,
+    });
+
+    for (const task of projTasks) {
+      const taskTitle = resolveLocalizedText(task.title, task.localizedTitle, lang);
+      const prog = calculateTaskProgress(task);
+      const doneTodos = task.todos.filter((td) => td.completed).length;
+
+      lines.push({
+        text: `• ${taskTitle} — ${prog}% (${doneTodos}/${task.todos.length} ${t.itemsCount})`,
+        size: 18,
+        weight: 'bold',
+        color: '#0F172A',
+        indent: 1,
+      });
+
+      lines.push({
+        text: `${getStatusLabel(task.status, t)} · ${getPriorityLabel(task.priority, t)} · ${t.dueDateLabel}: ${task.dueDate}`,
+        size: 15,
+        weight: 'normal',
+        color: '#64748B',
+        indent: 1,
+      });
+
+      for (const todo of task.todos) {
+        const todoTitle = resolveLocalizedText(todo.title, todo.localizedTitle, lang);
+        lines.push({
+          text: `${todo.completed ? '[✓]' : '[ ]'}  ${todoTitle}`,
+          size: 15,
+          weight: 'normal',
+          color: todo.completed ? '#059669' : '#334155',
+          indent: 2,
+        });
+      }
+
+      for (const upd of task.updates.slice(0, 3)) {
+        const updText = resolveLocalizedText(upd.content, upd.localizedContent, lang);
+        lines.push({
+          text: `[${formatDateTimeStamp(upd.timestamp)}] ${updText}`,
+          size: 14,
+          weight: 'normal',
+          color: '#475569',
+          indent: 2,
+        });
+      }
+
+      const allTaskPhotos: TaskAttachment[] = [
+        ...task.todos.flatMap((td) => td.photos || []),
+        ...task.updates.flatMap((u) => u.photos || []),
+        ...task.attachments.filter((a) => a.type === 'photo'),
+      ];
+      const photoThumbLines = buildPhotoThumbnailLines(allTaskPhotos, lang);
+      lines.push(...photoThumbLines);
+    }
+  }
+
+  await renderReportToPdf(
+    folderTitle,
+    `${t.appName} · ${t.folderTypeLabel} (${projects.length} groups · ${tasks.length} tasks)`,
+    avgProgress,
+    lines,
+    lang,
+    `folder_${folder.id}_report.pdf`
+  );
+}
+
+/**
+ * Triggers a browser download of an Excel-compatible UTF-8 BOM CSV spreadsheet.
+ */
+export function exportTasksToExcelCsv(
+  tasks: TaskItem[],
+  projects: ProjectGroupItem[],
+  folders: FolderItem[],
+  filename = 'task_tracker_report.csv'
+): void {
+  const csvContent = buildTasksCsvReport(tasks, projects, folders);
+  // Prepend UTF-8 BOM so Microsoft Excel opens Arabic, Hebrew, and English characters cleanly
+  const bomAndCsv = `\uFEFF${csvContent}`;
+  const blob = new Blob([bomAndCsv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+

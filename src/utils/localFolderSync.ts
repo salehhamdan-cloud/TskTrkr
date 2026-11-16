@@ -227,6 +227,7 @@ export function parseBackupPayload(
       tasks: rawWs.tasks,
       trash: Array.isArray(rawWs.trash) ? rawWs.trash : [],
       notifications: Array.isArray(rawWs.notifications) ? rawWs.notifications : [],
+      templates: Array.isArray(rawWs.templates) ? rawWs.templates : undefined,
     };
 
     const byteLength =

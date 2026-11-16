@@ -4,6 +4,31 @@ export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 
 export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'completed';
 
+export type RecurrenceFrequency =
+  | 'none'
+  | 'daily'
+  | 'weekly'
+  | 'monthly'
+  | 'yearly'
+  | 'custom';
+
+export type RecurrenceCustomUnit = 'days' | 'weeks' | 'months' | 'years';
+
+export interface TaskRecurrenceRule {
+  frequency: RecurrenceFrequency;
+  interval?: number;
+  customUnit?: RecurrenceCustomUnit;
+  intervalDays?: number;
+}
+
+export type TagColor = 'blue' | 'emerald' | 'amber' | 'rose' | 'violet' | 'cyan';
+
+export interface TaskTag {
+  id: string;
+  label: string;
+  color: TagColor;
+}
+
 export interface LocalizedText {
   en: string;
   ar: string;
@@ -24,6 +49,7 @@ export interface ProjectGroupItem {
   description: string;
   localizedName?: LocalizedText;
   localizedDescription?: LocalizedText;
+  pinned?: boolean;
   createdAt: string;
 }
 
@@ -89,6 +115,9 @@ export interface TaskItem {
   dueDate: string; // YYYY-MM-DD
   dueTime?: string; // HH:mm optional reminder time
   manualProgress: number; // Used when todos is empty (0-100)
+  pinned?: boolean;
+  tags?: TaskTag[];
+  recurrence?: TaskRecurrenceRule;
   todos: TodoItem[];
   updates: TaskUpdateLog[];
   attachments: TaskAttachment[];
@@ -96,8 +125,23 @@ export interface TaskItem {
   updatedAt: string;
 }
 
+export interface TaskTemplate {
+  id: string;
+  name: string;
+  description: string;
+  priority: TaskPriority;
+  tags?: TaskTag[];
+  recurrence?: TaskRecurrenceRule;
+  todos: Array<{
+    title: string;
+    subTodos?: string[];
+  }>;
+  createdAt: string;
+}
+
 export type SelectedSidebarNode =
   | { type: 'dashboard' }
+  | { type: 'calendar' }
   | { type: 'settings' }
   | { type: 'trash' }
   | { type: 'notifications' }
@@ -169,6 +213,7 @@ export interface WorkspaceState {
   folders: FolderItem[];
   projects: ProjectGroupItem[];
   tasks: TaskItem[];
+  templates?: TaskTemplate[];
   trash?: TrashItem[];
   notifications?: AppNotification[];
 }

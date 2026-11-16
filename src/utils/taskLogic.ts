@@ -7,18 +7,24 @@ import {
   PhotoTargetRef,
   ProjectGroupItem,
   ProjectMetrics,
+  RecurrenceCustomUnit,
+  RecurrenceFrequency,
   SelectedSidebarNode,
   SubTodoItem,
+  TagColor,
   TaskAttachment,
   TaskItem,
   TaskPriority,
+  TaskRecurrenceRule,
   TaskStatus,
+  TaskTag,
+  TaskTemplate,
   TaskUpdateLog,
   TodoItem,
   TrashItem,
   WorkspaceState,
 } from '../types/task';
-import { resolveLocalizedText } from '../i18n/translations';
+import { resolveLocalizedText, TranslationDictionary } from '../i18n/translations';
 
 export interface GlobalSearchResult {
   id: string;
@@ -115,6 +121,10 @@ export function searchWorkspace(
       .map((u) => u.milestoneTag)
       .filter(Boolean)
       .join(' ');
+    const customTagLabels = (task.tags || [])
+      .map((tg) => tg.label)
+      .filter(Boolean)
+      .join(' ');
     const todoTexts = task.todos
       .map((td) => {
         const subTexts = (td.subTodos || [])
@@ -149,6 +159,7 @@ export function searchWorkspace(
       task.localizedDescription?.ar,
       task.localizedDescription?.he,
       milestoneTags,
+      customTagLabels,
       todoTexts,
     ]
       .filter(Boolean)
@@ -157,13 +168,16 @@ export function searchWorkspace(
 
     if (searchable.includes(q)) {
       const prog = calculateTaskProgress(task);
+      const isTagMatch =
+        milestoneTags.toLowerCase().includes(q) ||
+        customTagLabels.toLowerCase().includes(q);
       results.push({
         id: `task-${task.id}`,
         node: { type: 'task', id: task.id },
         type: 'task',
         title: displayTitle,
         subtitle: `${prog}% · ${displayDesc || task.project}`,
-        matchedField: milestoneTags.toLowerCase().includes(q) ? 'tag' : 'task',
+        matchedField: isTagMatch ? 'tag' : 'task',
         priority: task.priority,
       });
     }
@@ -1854,4 +1868,755 @@ export function moveProjectToFolder(
     ),
   };
 }
+
+/**
+ * ============================================================================
+ * 1. CALENDAR & TIMELINE VIEW + DRAG-TO-RESCHEDULE HELPERS
+ * ============================================================================
+ */
+
+export interface CalendarDayCell {
+  dateStr: string;
+  dayNumber: number;
+  isCurrentMonth: boolean;
+  weekdayIndex: number;
+}
+
+function formatYmd(year: number, monthZeroIndexed: number, day: number): string {
+  const d = new Date(Date.UTC(year, monthZeroIndexed, day));
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
+/**
+ * Builds a 42-cell (6 weeks × 7 days, Sunday–Saturday) calendar grid for a given year & month (0-indexed).
+ */
+export function buildCalendarMonthDays(
+  year: number,
+  monthZeroIndexed: number
+): CalendarDayCell[] {
+  const firstOfMonth = new Date(Date.UTC(year, monthZeroIndexed, 1));
+  const startWeekday = firstOfMonth.getUTCDay(); // 0 = Sun ... 6 = Sat
+  const cells: CalendarDayCell[] = [];
+
+  for (let i = 0; i < 42; i++) {
+    const dayOffset = i - startWeekday + 1;
+    const cellDate = new Date(Date.UTC(year, monthZeroIndexed, dayOffset));
+    const cellYear = cellDate.getUTCFullYear();
+    const cellMonth = cellDate.getUTCMonth();
+    const cellDay = cellDate.getUTCDate();
+    cells.push({
+      dateStr: formatYmd(cellYear, cellMonth, cellDay),
+      dayNumber: cellDay,
+      isCurrentMonth: cellYear === year && cellMonth === monthZeroIndexed,
+      weekdayIndex: cellDate.getUTCDay(),
+    });
+  }
+
+  return cells;
+}
+
+/**
+ * Builds a 7-cell (Sunday–Saturday) calendar week array containing `anchorDateStr` (YYYY-MM-DD).
+ */
+export function buildCalendarWeekDays(anchorDateStr: string): CalendarDayCell[] {
+  const parts = anchorDateStr.split('-').map((n) => parseInt(n, 10));
+  const year = parts[0] || 2026;
+  const monthZero = (parts[1] || 1) - 1;
+  const day = parts[2] || 1;
+
+  const anchor = new Date(Date.UTC(year, monthZero, day));
+  const weekday = anchor.getUTCDay();
+  const cells: CalendarDayCell[] = [];
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(Date.UTC(year, monthZero, day - weekday + i));
+    cells.push({
+      dateStr: formatYmd(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+      dayNumber: d.getUTCDate(),
+      isCurrentMonth: d.getUTCMonth() === monthZero,
+      weekdayIndex: d.getUTCDay(),
+    });
+  }
+
+  return cells;
+}
+
+/**
+ * Updates a task's `dueDate` (and optionally `dueTime`) when dragged or clicked on the Calendar.
+ */
+export function rescheduleTaskDueDate(
+  state: WorkspaceState,
+  taskId: string,
+  newDueDate: string,
+  newDueTime?: string,
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  const trimmedDate = newDueDate.trim();
+  if (!trimmedDate) return state;
+  const existing = state.tasks.find((t) => t.id === taskId);
+  if (!existing) return state;
+
+  return {
+    ...state,
+    tasks: state.tasks.map((t) =>
+      t.id === taskId
+        ? {
+            ...t,
+            dueDate: trimmedDate,
+            dueTime: newDueTime !== undefined ? newDueTime : t.dueTime,
+            updatedAt: nowIso,
+          }
+        : t
+    ),
+  };
+}
+
+/**
+ * ============================================================================
+ * 2. RECURRING TASKS & REUSABLE TASK TEMPLATES HELPERS
+ * ============================================================================
+ */
+
+function addMonthsClampedUtc(baseDate: Date, monthsToAdd: number): Date {
+  const startYear = baseDate.getUTCFullYear();
+  const startMonth = baseDate.getUTCMonth();
+  const startDay = baseDate.getUTCDate();
+
+  const totalMonths = startMonth + monthsToAdd;
+  const targetYear = startYear + Math.floor(totalMonths / 12);
+  const targetMonth = ((totalMonths % 12) + 12) % 12;
+  const maxDaysInTargetMonth = new Date(
+    Date.UTC(targetYear, targetMonth + 1, 0)
+  ).getUTCDate();
+  const clampedDay = Math.min(startDay, maxDaysInTargetMonth);
+  return new Date(Date.UTC(targetYear, targetMonth, clampedDay));
+}
+
+/**
+ * Computes the next YYYY-MM-DD due date based on `recurrence` rule
+ * (`daily`, `weekly`, `monthly`, `yearly`, or `custom` in `days | weeks | months | years`).
+ */
+export function computeNextDueDate(
+  currentDueDate: string,
+  recurrence?: TaskRecurrenceRule
+): string | null {
+  if (!recurrence || recurrence.frequency === 'none') return null;
+
+  const parts = (currentDueDate || '').split('-').map((n) => parseInt(n, 10));
+  let baseDate =
+    parts.length === 3 && !parts.some((n) => Number.isNaN(n))
+      ? new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]))
+      : new Date();
+
+  const freq: RecurrenceFrequency = recurrence.frequency;
+  if (freq === 'daily') {
+    baseDate.setUTCDate(baseDate.getUTCDate() + 1);
+  } else if (freq === 'weekly') {
+    baseDate.setUTCDate(baseDate.getUTCDate() + 7);
+  } else if (freq === 'monthly') {
+    baseDate = addMonthsClampedUtc(baseDate, 1);
+  } else if (freq === 'yearly') {
+    baseDate = addMonthsClampedUtc(baseDate, 12);
+  } else if (freq === 'custom') {
+    const count = Math.max(
+      1,
+      Math.round(recurrence.interval ?? recurrence.intervalDays ?? 1)
+    );
+    const unit: RecurrenceCustomUnit = recurrence.customUnit || 'days';
+    if (unit === 'days') {
+      baseDate.setUTCDate(baseDate.getUTCDate() + count);
+    } else if (unit === 'weeks') {
+      baseDate.setUTCDate(baseDate.getUTCDate() + count * 7);
+    } else if (unit === 'months') {
+      baseDate = addMonthsClampedUtc(baseDate, count);
+    } else if (unit === 'years') {
+      baseDate = addMonthsClampedUtc(baseDate, count * 12);
+    }
+  }
+
+  return formatYmd(
+    baseDate.getUTCFullYear(),
+    baseDate.getUTCMonth(),
+    baseDate.getUTCDate()
+  );
+}
+
+/**
+ * Formats a human-readable summary of a task's recurrence rule (localized when `t` is passed).
+ */
+export function formatRecurrenceSummary(
+  recurrence?: TaskRecurrenceRule,
+  t?: Pick<
+    TranslationDictionary,
+    | 'recurrenceNone'
+    | 'recurrenceDaily'
+    | 'recurrenceWeekly'
+    | 'recurrenceMonthly'
+    | 'recurrenceYearly'
+    | 'recurrenceEveryPrefix'
+    | 'recurrenceUnitDays'
+    | 'recurrenceUnitWeeks'
+    | 'recurrenceUnitMonths'
+    | 'recurrenceUnitYears'
+  >
+): string {
+  if (!recurrence || recurrence.frequency === 'none') {
+    return t ? t.recurrenceNone : 'None';
+  }
+  if (recurrence.frequency === 'daily') {
+    return t ? t.recurrenceDaily : 'Daily';
+  }
+  if (recurrence.frequency === 'weekly') {
+    return t ? t.recurrenceWeekly : 'Weekly';
+  }
+  if (recurrence.frequency === 'monthly') {
+    return t ? t.recurrenceMonthly : 'Monthly';
+  }
+  if (recurrence.frequency === 'yearly') {
+    return t ? t.recurrenceYearly : 'Yearly';
+  }
+  const count = Math.max(
+    1,
+    Math.round(recurrence.interval ?? recurrence.intervalDays ?? 1)
+  );
+  const unit: RecurrenceCustomUnit = recurrence.customUnit || 'days';
+  const prefix = t ? t.recurrenceEveryPrefix : 'Every';
+  const unitLabel =
+    unit === 'weeks'
+      ? t
+        ? t.recurrenceUnitWeeks
+        : 'Weeks'
+      : unit === 'months'
+        ? t
+          ? t.recurrenceUnitMonths
+          : 'Months'
+        : unit === 'years'
+          ? t
+            ? t.recurrenceUnitYears
+            : 'Years'
+          : t
+            ? t.recurrenceUnitDays
+            : 'Days';
+  return `${prefix} ${count} ${unitLabel}`;
+}
+
+/**
+ * Marks a task completed and, if it has an active recurrence rule (`daily`, `weekly`, `monthly`, `yearly`, `custom`),
+ * automatically spawns the next occurrence with unchecked To-Dos and Sub-To-Dos.
+ */
+export function completeAndSpawnRecurringTask(
+  state: WorkspaceState,
+  taskId: string,
+  nowIso = new Date().toISOString()
+): { state: WorkspaceState; spawnedTask?: TaskItem } {
+  const target = state.tasks.find((t) => t.id === taskId);
+  if (!target) return { state };
+
+  const completedTodos = target.todos.map((td) => ({
+    ...td,
+    completed: true,
+    subTodos: td.subTodos
+      ? td.subTodos.map((st) => ({ ...st, completed: true }))
+      : undefined,
+  }));
+
+  const completedTask: TaskItem = {
+    ...target,
+    status: 'completed',
+    manualProgress: 100,
+    todos: completedTodos,
+    updatedAt: nowIso,
+  };
+
+  let nextTasks = state.tasks.map((t) => (t.id === taskId ? completedTask : t));
+  let spawnedTask: TaskItem | undefined;
+
+  if (target.recurrence && target.recurrence.frequency !== 'none') {
+    const nextDueDate = computeNextDueDate(
+      target.dueDate || nowIso.slice(0, 10),
+      target.recurrence
+    );
+    if (nextDueDate) {
+      const duplicateExists = nextTasks.some(
+        (t) =>
+          t.id !== target.id &&
+          t.title === target.title &&
+          t.projectId === target.projectId &&
+          t.dueDate === nextDueDate &&
+          t.status !== 'completed'
+      );
+
+      if (!duplicateExists) {
+        const freshTodos: TodoItem[] = target.todos.map((td, idx) => {
+          const newTodoId = `todo-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+          return {
+            id: newTodoId,
+            title: td.title,
+            localizedTitle: td.localizedTitle,
+            completed: false,
+            createdAt: nowIso,
+            subTodos: td.subTodos
+              ? td.subTodos.map((st, sIdx) => ({
+                  id: `sub-${Date.now()}-${idx}-${sIdx}-${Math.random().toString(36).slice(2, 6)}`,
+                  todoId: newTodoId,
+                  title: st.title,
+                  localizedTitle: st.localizedTitle,
+                  completed: false,
+                  createdAt: nowIso,
+                }))
+              : undefined,
+          };
+        });
+
+        spawnedTask = {
+          id: `tsk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          folderId: target.folderId,
+          projectId: target.projectId,
+          title: target.title,
+          localizedTitle: target.localizedTitle,
+          description: target.description,
+          localizedDescription: target.localizedDescription,
+          project: target.project,
+          priority: target.priority,
+          status: 'todo',
+          dueDate: nextDueDate,
+          dueTime: target.dueTime,
+          manualProgress: 0,
+          pinned: target.pinned,
+          tags: target.tags ? [...target.tags] : undefined,
+          recurrence: { ...target.recurrence },
+          todos: freshTodos,
+          updates: [],
+          attachments: [],
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
+
+        nextTasks = [spawnedTask, ...nextTasks];
+      }
+    }
+  }
+
+  return {
+    state: {
+      ...state,
+      tasks: nextTasks,
+    },
+    spawnedTask,
+  };
+}
+
+/**
+ * Returns built-in starter templates so users immediately have useful 1-click templates.
+ */
+export function getBuiltInTaskTemplates(): TaskTemplate[] {
+  return [
+    {
+      id: 'tpl-builtin-site-inspection',
+      name: 'Site Inspection & Safety Checklist',
+      description: 'Standard field inspection protocol with photo verification and sign-off steps.',
+      priority: 'high',
+      tags: [
+        { id: 'tag-site-visit', label: 'Site Visit', color: 'amber' },
+        { id: 'tag-urgent', label: 'Urgent', color: 'rose' },
+      ],
+      recurrence: { frequency: 'weekly' },
+      todos: [
+        {
+          title: 'Verify site safety & PPE compliance',
+          subTodos: ['Check hard hats & vests', 'Inspect perimeter barriers'],
+        },
+        {
+          title: 'Capture progress photos of active work zones',
+          subTodos: ['Main structure overview', 'Electrical & piping close-ups'],
+        },
+        {
+          title: 'Log supervisor notes & client sign-off',
+        },
+      ],
+      createdAt: '2026-11-01T08:00:00.000Z',
+    },
+    {
+      id: 'tpl-builtin-weekly-sprint',
+      name: 'Weekly Progress Report & QA Review',
+      description: 'Routine weekly deliverable review, quality checks, and stakeholder update.',
+      priority: 'medium',
+      tags: [{ id: 'tag-client-approval', label: 'Client Approval', color: 'blue' }],
+      recurrence: { frequency: 'weekly' },
+      todos: [
+        {
+          title: 'Compile completed milestones & metrics',
+          subTodos: ['Review open blockers', 'Verify completed sub-tasks'],
+        },
+        {
+          title: 'Export PDF status report & share with team',
+        },
+      ],
+      createdAt: '2026-11-01T08:00:00.000Z',
+    },
+  ];
+}
+
+/**
+ * Saves an existing task's structure (priority, tags, recurrence, todos, and sub-todos) as a reusable template.
+ */
+export function createTemplateFromTask(
+  state: WorkspaceState,
+  task: TaskItem,
+  templateName?: string,
+  nowIso = new Date().toISOString()
+): { state: WorkspaceState; createdTemplate: TaskTemplate } {
+  const name = (templateName || task.title).trim() || 'Task Template';
+  const newTemplate: TaskTemplate = {
+    id: `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    name,
+    description: task.description,
+    priority: task.priority,
+    tags: task.tags ? task.tags.map((tg) => ({ ...tg })) : undefined,
+    recurrence: task.recurrence ? { ...task.recurrence } : undefined,
+    todos: task.todos.map((td) => ({
+      title: td.title,
+      subTodos: td.subTodos ? td.subTodos.map((st) => st.title) : undefined,
+    })),
+    createdAt: nowIso,
+  };
+
+  const existingTemplates = state.templates || getBuiltInTaskTemplates();
+  return {
+    state: {
+      ...state,
+      templates: [newTemplate, ...existingTemplates],
+    },
+    createdTemplate: newTemplate,
+  };
+}
+
+/**
+ * Instantiates a brand-new `TaskItem` from a `TaskTemplate`.
+ */
+export function instantiateTaskFromTemplate(
+  template: TaskTemplate,
+  targetFolderId: string,
+  targetProjectId: string,
+  projectName: string,
+  dueDate: string,
+  dueTime?: string,
+  nowIso = new Date().toISOString()
+): TaskItem {
+  const todos: TodoItem[] = template.todos.map((td, idx) => {
+    const todoId = `todo-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+    const subTodos: SubTodoItem[] | undefined =
+      td.subTodos && td.subTodos.length > 0
+        ? td.subTodos.map((subTitle, sIdx) => ({
+            id: `sub-${Date.now()}-${idx}-${sIdx}-${Math.random().toString(36).slice(2, 6)}`,
+            todoId,
+            title: subTitle,
+            completed: false,
+            createdAt: nowIso,
+          }))
+        : undefined;
+
+    return {
+      id: todoId,
+      title: td.title,
+      completed: false,
+      createdAt: nowIso,
+      subTodos,
+    };
+  });
+
+  return {
+    id: `tsk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    folderId: targetFolderId,
+    projectId: targetProjectId,
+    title: template.name,
+    description: template.description,
+    project: projectName,
+    priority: template.priority,
+    status: 'todo',
+    dueDate,
+    dueTime: dueTime || undefined,
+    manualProgress: 0,
+    tags: template.tags ? template.tags.map((tg) => ({ ...tg })) : undefined,
+    recurrence: template.recurrence ? { ...template.recurrence } : undefined,
+    todos,
+    updates: [],
+    attachments: [],
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+}
+
+export function deleteTaskTemplate(
+  state: WorkspaceState,
+  templateId: string
+): WorkspaceState {
+  const existing = state.templates || getBuiltInTaskTemplates();
+  return {
+    ...state,
+    templates: existing.filter((tpl) => tpl.id !== templateId),
+  };
+}
+
+/**
+ * ============================================================================
+ * 3. PINNING, FAVORITES & COLOR-CODED CUSTOM TAGS HELPERS
+ * ============================================================================
+ */
+
+export function togglePinTask(
+  state: WorkspaceState,
+  taskId: string,
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  return {
+    ...state,
+    tasks: state.tasks.map((t) =>
+      t.id === taskId ? { ...t, pinned: !t.pinned, updatedAt: nowIso } : t
+    ),
+  };
+}
+
+export function togglePinProject(
+  state: WorkspaceState,
+  projectId: string
+): WorkspaceState {
+  return {
+    ...state,
+    projects: state.projects.map((p) =>
+      p.id === projectId ? { ...p, pinned: !p.pinned } : p
+    ),
+  };
+}
+
+export function addTagToTask(
+  task: TaskItem,
+  label: string,
+  color: TagColor = 'blue',
+  nowIso = new Date().toISOString()
+): TaskItem {
+  const trimmed = label.trim();
+  if (!trimmed) return task;
+  const existing = task.tags || [];
+  if (existing.some((tg) => tg.label.toLowerCase() === trimmed.toLowerCase())) {
+    return task;
+  }
+  const newTag: TaskTag = {
+    id: `tag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    label: trimmed,
+    color,
+  };
+  return {
+    ...task,
+    tags: [...existing, newTag],
+    updatedAt: nowIso,
+  };
+}
+
+export function removeTagFromTask(
+  task: TaskItem,
+  tagId: string,
+  nowIso = new Date().toISOString()
+): TaskItem {
+  const existing = task.tags || [];
+  return {
+    ...task,
+    tags: existing.filter((tg) => tg.id !== tagId),
+    updatedAt: nowIso,
+  };
+}
+
+/**
+ * Returns deduplicated custom tags across all tasks in the workspace.
+ */
+export function collectAllWorkspaceTags(tasks: TaskItem[]): TaskTag[] {
+  const map = new Map<string, TaskTag>();
+  for (const t of tasks) {
+    for (const tg of t.tags || []) {
+      const key = tg.label.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, tg);
+      }
+    }
+  }
+  return Array.from(map.values());
+}
+
+/**
+ * ============================================================================
+ * 4. BATCH ACTIONS & FULL PROJECT / FOLDER CSV / EXCEL REPORT HELPERS
+ * ============================================================================
+ */
+
+export function batchUpdateTasks(
+  state: WorkspaceState,
+  taskIds: string[],
+  patch: {
+    status?: TaskStatus;
+    priority?: TaskPriority;
+    dueDate?: string;
+    targetProjectId?: string;
+    pinned?: boolean;
+  },
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  if (!taskIds || taskIds.length === 0) return state;
+  const idSet = new Set(taskIds);
+  const targetProject = patch.targetProjectId
+    ? state.projects.find((p) => p.id === patch.targetProjectId)
+    : undefined;
+
+  let nextState: WorkspaceState = {
+    ...state,
+    tasks: state.tasks.map((task) => {
+      if (!idSet.has(task.id)) return task;
+      const nextStatus = patch.status !== undefined ? patch.status : task.status;
+      const nextManualProgress =
+        patch.status === 'completed'
+          ? 100
+          : patch.status === 'todo'
+            ? 0
+            : task.manualProgress;
+      const nextTodos =
+        patch.status === 'completed'
+          ? task.todos.map((td) => ({
+              ...td,
+              completed: true,
+              subTodos: td.subTodos
+                ? td.subTodos.map((s) => ({ ...s, completed: true }))
+                : undefined,
+            }))
+          : patch.status === 'todo'
+            ? task.todos.map((td) => ({
+                ...td,
+                completed: false,
+                subTodos: td.subTodos
+                  ? td.subTodos.map((s) => ({ ...s, completed: false }))
+                  : undefined,
+              }))
+            : task.todos;
+
+      return {
+        ...task,
+        status: nextStatus,
+        manualProgress: nextManualProgress,
+        todos: nextTodos,
+        priority: patch.priority !== undefined ? patch.priority : task.priority,
+        dueDate: patch.dueDate !== undefined ? patch.dueDate : task.dueDate,
+        pinned: patch.pinned !== undefined ? patch.pinned : task.pinned,
+        folderId: targetProject ? targetProject.folderId : task.folderId,
+        projectId: targetProject ? targetProject.id : task.projectId,
+        project: targetProject ? targetProject.name : task.project,
+        updatedAt: nowIso,
+      };
+    }),
+  };
+
+  if (patch.status === 'completed') {
+    for (const id of taskIds) {
+      const prevTask = state.tasks.find((t) => t.id === id);
+      if (
+        prevTask &&
+        prevTask.status !== 'completed' &&
+        prevTask.recurrence &&
+        prevTask.recurrence.frequency !== 'none'
+      ) {
+        nextState = completeAndSpawnRecurringTask(nextState, id, nowIso).state;
+      }
+    }
+  }
+
+  return nextState;
+}
+
+export function batchMoveTasksToTrash(
+  state: WorkspaceState,
+  taskIds: string[],
+  nowIso = new Date().toISOString()
+): WorkspaceState {
+  let nextState = state;
+  for (const id of taskIds) {
+    nextState = moveTaskToTrash(nextState, id, nowIso);
+  }
+  return nextState;
+}
+
+function escapeCsvCell(val: string | number | undefined | null): string {
+  const str = String(val ?? '');
+  if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+/**
+ * Generates an Excel-compatible CSV report string for a list of tasks (Project Group or entire Folder).
+ */
+export function buildTasksCsvReport(
+  tasks: TaskItem[],
+  projects: ProjectGroupItem[],
+  folders: FolderItem[]
+): string {
+  const folderMap = new Map(folders.map((f) => [f.id, f.name]));
+  const projectMap = new Map(projects.map((p) => [p.id, p.name]));
+
+  const headers = [
+    'Folder',
+    'Project Group',
+    'Task Title',
+    'Status',
+    'Priority',
+    'Progress (%)',
+    'Due Date',
+    'Due Time',
+    'Recurrence',
+    'Pinned',
+    'Custom Tags',
+    'To-Do Checklist (Completed/Total)',
+    'Updates Count',
+    'Photos Count',
+    'Latest Update',
+  ];
+
+  const rows: string[] = [headers.map(escapeCsvCell).join(',')];
+
+  for (const task of tasks) {
+    const folderName = (task.folderId && folderMap.get(task.folderId)) || 'Workspace';
+    const projectName =
+      (task.projectId && projectMap.get(task.projectId)) || task.project || 'General';
+    const progress = calculateTaskProgress(task);
+    const todoCounts = getTaskTodoCounts(task.todos);
+    const photosCount = countAllPhotosInTask(task);
+    const tagsStr = (task.tags || []).map((t) => t.label).join('; ');
+    const recurrenceStr = formatRecurrenceSummary(task.recurrence);
+    const latestUpdate = task.updates[0]
+      ? `${task.updates[0].timestamp}: ${task.updates[0].content}`
+      : '';
+
+    const row = [
+      folderName,
+      projectName,
+      task.title,
+      task.status,
+      task.priority,
+      progress,
+      task.dueDate || '',
+      task.dueTime || '',
+      recurrenceStr,
+      task.pinned ? 'Yes' : 'No',
+      tagsStr,
+      `${todoCounts.completed}/${todoCounts.total}`,
+      task.updates.length,
+      photosCount,
+      latestUpdate,
+    ];
+    rows.push(row.map(escapeCsvCell).join(','));
+  }
+
+  return rows.join('\r\n');
+}
+
 

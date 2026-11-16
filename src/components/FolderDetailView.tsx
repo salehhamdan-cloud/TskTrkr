@@ -3,9 +3,12 @@ import {
   ArrowRightLeft,
   ArrowUpDown,
   Check,
+  FileSpreadsheet,
+  FileText,
   Folder,
   Layers,
   Pencil,
+  Pin,
   Plus,
   RotateCcw,
   Search,
@@ -24,6 +27,7 @@ import {
   TranslationDictionary,
 } from '../i18n/translations';
 import { calculateTaskProgress } from '../utils/taskLogic';
+import { exportFolderToPdf, exportTasksToExcelCsv } from '../utils/pdfExport';
 
 interface FolderDetailViewProps {
   folder: FolderItem;
@@ -37,6 +41,7 @@ interface FolderDetailViewProps {
   onCreateProject: (folderId: string, name: string, description: string) => void;
   onUpdateProject: (projectId: string, patch: { name?: string; description?: string }) => void;
   onMoveProject?: (projectId: string) => void;
+  onTogglePinProject?: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
 }
 
@@ -52,6 +57,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
   onCreateProject,
   onUpdateProject,
   onMoveProject,
+  onTogglePinProject,
   onDeleteProject,
 }) => {
   const folderDisplayName = resolveLocalizedText(
@@ -116,6 +122,9 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
     });
 
     list = [...list].sort((a, b) => {
+      if (Boolean(a.pinned) !== Boolean(b.pinned)) {
+        return a.pinned ? -1 : 1;
+      }
       const aTasks = tasks.filter((tsk) => tsk.projectId === a.id);
       const bTasks = tasks.filter((tsk) => tsk.projectId === b.id);
       const aProgress =
@@ -212,6 +221,31 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                data-testid="export-folder-pdf-btn"
+                onClick={() => exportFolderToPdf(folder, projects, folderTasks, lang, t)}
+                className="h-9 px-3 rounded-lg border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 text-xs font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100/80 dark:hover:bg-blue-900/50 inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <span>{t.exportFolderPdfButton}</span>
+              </button>
+              <button
+                type="button"
+                data-testid="export-folder-csv-btn"
+                onClick={() =>
+                  exportTasksToExcelCsv(
+                    folderTasks,
+                    projects,
+                    [folder],
+                    `folder_${folder.id}_tasks.csv`
+                  )
+                }
+                className="h-9 px-3 rounded-lg border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50/70 dark:bg-emerald-950/40 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/50 inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+                <span>{t.exportExcelCsvButton}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -483,6 +517,22 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
                       </button>
 
                       <div className="flex items-center gap-1 shrink-0">
+                        {onTogglePinProject && (
+                          <button
+                            type="button"
+                            data-testid={`pin-project-btn-${proj.id}`}
+                            onClick={() => onTogglePinProject(proj.id)}
+                            title={proj.pinned ? t.unpinItemButton : t.pinItemButton}
+                            aria-label={proj.pinned ? t.unpinItemButton : t.pinItemButton}
+                            className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                              proj.pinned
+                                ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/40'
+                                : 'text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            <Pin className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         {onMoveProject && (
                           <button
                             type="button"

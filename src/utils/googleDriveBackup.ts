@@ -32,6 +32,7 @@ export interface GoogleDriveBackupMeta {
   lastBackupAt: string | null;
   lastBackupFileId: string | null;
   lastBackupBytes: number;
+  autoSyncOnChange?: boolean;
 }
 
 export interface DriveFolderEntry {
@@ -58,6 +59,7 @@ export function getDefaultGoogleDriveMeta(): GoogleDriveBackupMeta {
     lastBackupAt: null,
     lastBackupFileId: null,
     lastBackupBytes: 0,
+    autoSyncOnChange: true,
   };
 }
 
@@ -800,6 +802,7 @@ export async function uploadOrOverwriteBackupInDriveFolder(
     modifiedTime?: string;
   };
 
+  const currentMeta = loadGoogleDriveMeta();
   return saveGoogleDriveMeta({
     isConfigured: true,
     folderId: folderId || 'root',
@@ -807,5 +810,46 @@ export async function uploadOrOverwriteBackupInDriveFolder(
     lastBackupAt: new Date().toISOString(),
     lastBackupFileId: uploaded.id,
     lastBackupBytes: byteLength,
+    autoSyncOnChange:
+      currentMeta.autoSyncOnChange !== undefined
+        ? currentMeta.autoSyncOnChange
+        : true,
   });
 }
+
+/**
+ * Checks whether the Google Drive folder has a newer backup file than `lastLocalBackupAt`.
+ */
+export async function checkNewerBackupOnDrive(
+  token: string,
+  folderId: string,
+  folderName: string,
+  lastLocalBackupAt: string | null
+): Promise<{
+  isNewer: boolean;
+  scanResult: DriveFolderScanResult;
+}> {
+  const scanResult = await scanDriveFolderForBackup(token, folderId, folderName);
+  if (!scanResult.hasBackup || !scanResult.backup) {
+    return { isNewer: false, scanResult };
+  }
+
+  const remoteTimeStr =
+    scanResult.backup.exportedAt || scanResult.existingModifiedTime;
+  if (!lastLocalBackupAt || !remoteTimeStr) {
+    return { isNewer: true, scanResult };
+  }
+
+  const remoteMs = new Date(remoteTimeStr).getTime();
+  const localMs = new Date(lastLocalBackupAt).getTime();
+  if (Number.isNaN(remoteMs) || Number.isNaN(localMs)) {
+    return { isNewer: true, scanResult };
+  }
+
+  // Treat remote backup as newer if it is at least 2 seconds newer than our last local backup timestamp
+  return {
+    isNewer: remoteMs > localMs + 2000,
+    scanResult,
+  };
+}
+

@@ -3,6 +3,7 @@ import {
   ArrowRightLeft,
   BarChart3,
   Bell,
+  Calendar,
   Check,
   CheckSquare,
   ChevronDown,
@@ -11,6 +12,7 @@ import {
   FolderPlus,
   Layers,
   Pencil,
+  Pin,
   Plus,
   Settings,
   Trash2,
@@ -49,6 +51,8 @@ interface SidebarTreeProps {
   onOpenNewTaskForProject: (folderId: string, projectId: string) => void;
   onMoveProject?: (projectId: string) => void;
   onMoveTask?: (taskId: string) => void;
+  onTogglePinProject?: (projectId: string) => void;
+  onTogglePinTask?: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
 }
 
@@ -72,8 +76,12 @@ export const SidebarTree: React.FC<SidebarTreeProps> = ({
   onOpenNewTaskForProject,
   onMoveProject,
   onMoveTask,
+  onTogglePinProject,
+  onTogglePinTask,
   onDeleteTask,
 }) => {
+  const pinnedProjects = projects.filter((p) => p.pinned);
+  const pinnedTasks = tasks.filter((tsk) => tsk.pinned);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>(() => {
     const map: Record<string, boolean> = {};
     folders.forEach((f) => {
@@ -178,6 +186,22 @@ export const SidebarTree: React.FC<SidebarTreeProps> = ({
 
         <button
           type="button"
+          data-testid="sidebar-calendar-btn"
+          onClick={() => onSelectNode({ type: 'calendar' })}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+            selectedNode.type === 'calendar'
+              ? 'bg-blue-600 text-white'
+              : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <span className="inline-flex items-center gap-2.5 truncate">
+            <Calendar className="w-4 h-4 shrink-0" />
+            <span className="truncate">{t.calendarNav}</span>
+          </span>
+        </button>
+
+        <button
+          type="button"
           data-testid="sidebar-notifications-btn"
           onClick={() => onSelectNode({ type: 'notifications' })}
           className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
@@ -244,6 +268,87 @@ export const SidebarTree: React.FC<SidebarTreeProps> = ({
           </span>
         </button>
       </div>
+
+      {/* Pinned & Starred Quick Access Section */}
+      {(pinnedProjects.length > 0 || pinnedTasks.length > 0) && (
+        <div
+          data-testid="sidebar-pinned-section"
+          className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-amber-50/40 dark:bg-amber-950/15 space-y-1"
+        >
+          <div className="flex items-center gap-1.5 px-1 text-[10px] font-mono uppercase tracking-wider font-bold text-amber-700 dark:text-amber-400">
+            <Pin className="w-3 h-3 shrink-0" />
+            <span>{t.pinnedSectionTitle}</span>
+          </div>
+          {pinnedProjects.map((proj) => {
+            const name = resolveLocalizedText(proj.name, proj.localizedName, lang);
+            const active =
+              selectedNode.type === 'project' && selectedNode.id === proj.id;
+            return (
+              <div
+                key={`pin-prj-${proj.id}`}
+                className={`flex items-center justify-between gap-1 rounded-lg px-2 py-1 text-xs ${
+                  active
+                    ? 'bg-blue-600 text-white font-semibold'
+                    : 'text-slate-700 dark:text-slate-200 hover:bg-amber-100/60 dark:hover:bg-slate-800'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelectNode({ type: 'project', id: proj.id })}
+                  className="flex items-center gap-1.5 min-w-0 flex-1 text-start truncate cursor-pointer"
+                >
+                  <Layers className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                  <span className="truncate">{name}</span>
+                </button>
+                {onTogglePinProject && (
+                  <button
+                    type="button"
+                    onClick={() => onTogglePinProject(proj.id)}
+                    title={t.unpinItemButton}
+                    className="p-0.5 rounded text-amber-500 hover:text-amber-600 cursor-pointer"
+                  >
+                    <Pin className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          {pinnedTasks.map((tsk) => {
+            const title = resolveLocalizedText(tsk.title, tsk.localizedTitle, lang);
+            const active =
+              selectedNode.type === 'task' && selectedNode.id === tsk.id;
+            return (
+              <div
+                key={`pin-tsk-${tsk.id}`}
+                className={`flex items-center justify-between gap-1 rounded-lg px-2 py-1 text-xs ${
+                  active
+                    ? 'bg-blue-600 text-white font-semibold'
+                    : 'text-slate-700 dark:text-slate-200 hover:bg-amber-100/60 dark:hover:bg-slate-800'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelectNode({ type: 'task', id: tsk.id })}
+                  className="flex items-center gap-1.5 min-w-0 flex-1 text-start truncate cursor-pointer"
+                >
+                  <CheckSquare className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                  <span className="truncate">{title}</span>
+                </button>
+                {onTogglePinTask && (
+                  <button
+                    type="button"
+                    onClick={() => onTogglePinTask(tsk.id)}
+                    title={t.unpinItemButton}
+                    className="p-0.5 rounded text-amber-500 hover:text-amber-600 cursor-pointer"
+                  >
+                    <Pin className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Folders Header + Add Folder Action */}
       <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-2">
@@ -364,6 +469,7 @@ export const SidebarTree: React.FC<SidebarTreeProps> = ({
                     </button>
                     <button
                       type="button"
+                      data-testid={`sidebar-folder-btn-${folder.id}`}
                       onClick={() => onSelectNode({ type: 'folder', id: folder.id })}
                       className="flex items-center gap-2 min-w-0 flex-1 text-start py-0.5 text-xs font-semibold cursor-pointer"
                     >

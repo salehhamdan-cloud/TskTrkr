@@ -352,6 +352,68 @@ export interface TranslationDictionary {
   driveCurrentFolderTab: string;
   driveQuickCreateBackupFolderButton: string;
   driveFolderSelectedSuccess: string;
+  // 1. Calendar & Timeline View
+  calendarNav: string;
+  calendarTitle: string;
+  calendarSubtitle: string;
+  calendarMonthView: string;
+  calendarWeekView: string;
+  calendarTodayButton: string;
+  calendarDragHint: string;
+  calendarRescheduleButton: string;
+  calendarTaskRescheduledToast: string;
+  calendarNoTasksOnDay: string;
+  // 2. Recurring Tasks & Templates
+  recurrenceLabel: string;
+  recurrenceNone: string;
+  recurrenceDaily: string;
+  recurrenceWeekly: string;
+  recurrenceMonthly: string;
+  recurrenceYearly: string;
+  recurrenceCustom: string;
+  recurrenceIntervalDaysLabel: string;
+  recurrenceUnitDays: string;
+  recurrenceUnitWeeks: string;
+  recurrenceUnitMonths: string;
+  recurrenceUnitYears: string;
+  recurrenceEveryPrefix: string;
+  recurringNextSpawnedToast: string;
+  saveAsTemplateButton: string;
+  templateSavedToast: string;
+  loadFromTemplateLabel: string;
+  selectTemplatePlaceholder: string;
+  applyTemplateButton: string;
+  deleteTemplateButton: string;
+  // 3. Pinning, Favorites & Custom Tags
+  pinnedSectionTitle: string;
+  pinItemButton: string;
+  unpinItemButton: string;
+  customTagsLabel: string;
+  addTagPlaceholder: string;
+  addTagButton: string;
+  filterByTagLabel: string;
+  allTagsFilter: string;
+  // 4. Automatic Google Drive Sync & Conflict Check
+  driveAutoSyncLabel: string;
+  driveAutoSyncDesc: string;
+  driveCheckNewerBackupButton: string;
+  driveNewerBackupFoundTitle: string;
+  driveUpToDateToast: string;
+  driveAutoSyncedBadge: string;
+  // 5. Batch Actions & Full Project PDF / Excel Reports
+  exportFolderPdfButton: string;
+  exportExcelCsvButton: string;
+  batchSelectModeButton: string;
+  exitBatchSelectButton: string;
+  selectedTasksCountLabel: string;
+  selectAllTasksButton: string;
+  clearSelectionButton: string;
+  batchApplyStatusLabel: string;
+  batchApplyPriorityLabel: string;
+  batchApplyDueDateLabel: string;
+  batchMoveToGroupLabel: string;
+  batchDeleteSelectedButton: string;
+  batchUpdatedToast: string;
 }
 
 export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
@@ -701,6 +763,63 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     driveCurrentFolderTab: 'Current Folder',
     driveQuickCreateBackupFolderButton: 'Create & Select "TaskTracker_Backup" Folder',
     driveFolderSelectedSuccess: 'Google Drive backup folder selected successfully.',
+    calendarNav: 'Calendar & Timeline',
+    calendarTitle: 'Calendar & Timeline View',
+    calendarSubtitle: 'Plot all tasks and due times on a monthly or weekly calendar. Drag any task card to another day or pick a date to reschedule immediately.',
+    calendarMonthView: 'Monthly View',
+    calendarWeekView: 'Weekly Timeline',
+    calendarTodayButton: 'Today',
+    calendarDragHint: 'Tip: Drag & drop any task onto another day—or use the date picker on a card—to reschedule its due date.',
+    calendarRescheduleButton: 'Reschedule',
+    calendarTaskRescheduledToast: 'Task due date rescheduled',
+    calendarNoTasksOnDay: 'No tasks due',
+    recurrenceLabel: 'Repeat / Recurrence',
+    recurrenceNone: 'Does Not Repeat',
+    recurrenceDaily: 'Daily',
+    recurrenceWeekly: 'Weekly',
+    recurrenceMonthly: 'Monthly',
+    recurrenceYearly: 'Yearly',
+    recurrenceCustom: 'Custom Interval',
+    recurrenceIntervalDaysLabel: 'Repeat every',
+    recurrenceUnitDays: 'Days',
+    recurrenceUnitWeeks: 'Weeks',
+    recurrenceUnitMonths: 'Months',
+    recurrenceUnitYears: 'Years',
+    recurrenceEveryPrefix: 'Every',
+    recurringNextSpawnedToast: 'Completed! Next recurring task created automatically.',
+    saveAsTemplateButton: 'Save as Template',
+    templateSavedToast: 'Task structure saved as reusable template!',
+    loadFromTemplateLabel: 'Quick-Fill from Task Template',
+    selectTemplatePlaceholder: 'Choose a saved template...',
+    applyTemplateButton: 'Apply Template',
+    deleteTemplateButton: 'Delete Template',
+    pinnedSectionTitle: 'Pinned & Starred',
+    pinItemButton: 'Pin to Top',
+    unpinItemButton: 'Unpin',
+    customTagsLabel: 'Custom Color Tags',
+    addTagPlaceholder: 'New tag (e.g. Urgent, Site Visit)...',
+    addTagButton: 'Add Tag',
+    filterByTagLabel: 'Filter by Tag',
+    allTagsFilter: 'All Tags',
+    driveAutoSyncLabel: 'Auto-Backup on Change',
+    driveAutoSyncDesc: 'Automatically sync changes to your selected Google Drive folder in the background whenever you add or edit tasks.',
+    driveCheckNewerBackupButton: 'Check for Newer Backup on Drive',
+    driveNewerBackupFoundTitle: 'Newer Backup Found on Google Drive',
+    driveUpToDateToast: 'Your local workspace is already up to date with Google Drive.',
+    driveAutoSyncedBadge: 'Auto-Sync Active',
+    exportFolderPdfButton: 'Export Folder PDF',
+    exportExcelCsvButton: 'Export Excel / CSV',
+    batchSelectModeButton: 'Multi-Select Tasks',
+    exitBatchSelectButton: 'Done Selecting',
+    selectedTasksCountLabel: 'selected',
+    selectAllTasksButton: 'Select All',
+    clearSelectionButton: 'Clear',
+    batchApplyStatusLabel: 'Set Status...',
+    batchApplyPriorityLabel: 'Set Priority...',
+    batchApplyDueDateLabel: 'Set Due Date',
+    batchMoveToGroupLabel: 'Move to Group...',
+    batchDeleteSelectedButton: 'Move Selected to Trash',
+    batchUpdatedToast: 'Batch update applied to selected tasks',
   },
   ar: {
     appName: 'متتبع المهام',
@@ -1048,6 +1167,63 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     driveCurrentFolderTab: 'المجلد الحالي',
     driveQuickCreateBackupFolderButton: 'إنشاء واختيار مجلد "TaskTracker_Backup"',
     driveFolderSelectedSuccess: 'تم اختيار مجلد النسخ الاحتياطي في Google Drive بنجاح.',
+    calendarNav: 'التقويم والجدول الزمني',
+    calendarTitle: 'عرض التقويم والجدول الزمني',
+    calendarSubtitle: 'شاهد جميع المهام ومواعيد الاستحقاق في تقويم شهري أو أسبوعي، واسحب أي مهمة ليوم آخر لتغيير موعدها فوراً.',
+    calendarMonthView: 'عرض شهري',
+    calendarWeekView: 'جدول أسبوعي',
+    calendarTodayButton: 'اليوم',
+    calendarDragHint: 'تلميح: اسحب وأفلت أي مهمة إلى يوم آخر أو اختر التاريخ مباشرة لإعادة جدولة موعد الاستحقاق.',
+    calendarRescheduleButton: 'إعادة جدولة',
+    calendarTaskRescheduledToast: 'تم تحديث تاريخ استحقاق المهمة',
+    calendarNoTasksOnDay: 'لا توجد مهام',
+    recurrenceLabel: 'التكرار التلقائي',
+    recurrenceNone: 'بدون تكرار',
+    recurrenceDaily: 'يومياً',
+    recurrenceWeekly: 'أسبوعياً',
+    recurrenceMonthly: 'شهرياً',
+    recurrenceYearly: 'سنوياً',
+    recurrenceCustom: 'فترة مخصصة',
+    recurrenceIntervalDaysLabel: 'تكرار كل',
+    recurrenceUnitDays: 'أيام',
+    recurrenceUnitWeeks: 'أسابيع',
+    recurrenceUnitMonths: 'أشهر',
+    recurrenceUnitYears: 'سنوات',
+    recurrenceEveryPrefix: 'كل',
+    recurringNextSpawnedToast: 'تم إكمال المهمة وإنشاء المهمة المتكررة التالية تلقائياً.',
+    saveAsTemplateButton: 'حفظ كقالب جاهز',
+    templateSavedToast: 'تم حفظ هيكل المهمة وقائمتها كقالب قابل لإعادة الاستخدام!',
+    loadFromTemplateLabel: 'تعبئة سريعة من قالب محفوظ',
+    selectTemplatePlaceholder: 'اختر قالباً محفوظاً...',
+    applyTemplateButton: 'تطبيق القالب',
+    deleteTemplateButton: 'حذف القالب',
+    pinnedSectionTitle: 'المثبتة والمفضلة',
+    pinItemButton: 'تثبيت في الأعلى',
+    unpinItemButton: 'إلغاء التثبيت',
+    customTagsLabel: 'الوسوم الملونة المخصصة',
+    addTagPlaceholder: 'وسم جديد (مثل: عاجل، زيارة موقع)...',
+    addTagButton: 'إضافة وسم',
+    filterByTagLabel: 'تصفية حسب الوسم',
+    allTagsFilter: 'كل الوسوم',
+    driveAutoSyncLabel: 'نسخ احتياطي تلقائي عند التعديل',
+    driveAutoSyncDesc: 'مزامنة التغييرات تلقائياً في الخلفية إلى مجلد Google Drive المختار عند إضافة أو تعديل المهام.',
+    driveCheckNewerBackupButton: 'التحقق من وجود نسخة أحدث في Drive',
+    driveNewerBackupFoundTitle: 'تم العثور على نسخة احتياطية أحدث في Google Drive',
+    driveUpToDateToast: 'بياناتك الحالية محدثة بالفعل ومطابقة لنسخة Google Drive.',
+    driveAutoSyncedBadge: 'المزامنة التلقائية نشطة',
+    exportFolderPdfButton: 'تصدير PDF للمجلد',
+    exportExcelCsvButton: 'تصدير Excel / CSV',
+    batchSelectModeButton: 'تحديد متعدد للمهام',
+    exitBatchSelectButton: 'إنهاء التحديد',
+    selectedTasksCountLabel: 'محددة',
+    selectAllTasksButton: 'تحديد الكل',
+    clearSelectionButton: 'مسح',
+    batchApplyStatusLabel: 'تغيير الحالة...',
+    batchApplyPriorityLabel: 'تغيير الأولوية...',
+    batchApplyDueDateLabel: 'تعيين التاريخ',
+    batchMoveToGroupLabel: 'نقل إلى مجموعة...',
+    batchDeleteSelectedButton: 'نقل المحدد لسلة المحذوفات',
+    batchUpdatedToast: 'تم تطبيق التعديل الجماعي على المهام المحددة',
   },
   he: {
     appName: 'מעקב משימות Task Tracker',
@@ -1395,6 +1571,63 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     driveCurrentFolderTab: 'תיקייה נוכחית',
     driveQuickCreateBackupFolderButton: 'צור ובחר תיקיית "TaskTracker_Backup"',
     driveFolderSelectedSuccess: 'תיקיית הגיבוי ב-Google Drive נבחרה בהצלחה.',
+    calendarNav: 'לוח שנה וציר זמן',
+    calendarTitle: 'תצוגת לוח שנה וציר זמן',
+    calendarSubtitle: 'צפה בכל המשימות ותאריכי היעד בלוח חודשי או שבועי. גרור משימה ליום אחר כדי לעדכן את תאריך היעד מיד.',
+    calendarMonthView: 'תצוגה חודשית',
+    calendarWeekView: 'ציר זמן שבועי',
+    calendarTodayButton: 'היום',
+    calendarDragHint: 'טיפ: גרור ושחרר משימה ליום אחר או בחר תאריך בכרטיס כדי לתזמן מחדש.',
+    calendarRescheduleButton: 'תזמן מחדש',
+    calendarTaskRescheduledToast: 'תאריך היעד של המשימה עודכן',
+    calendarNoTasksOnDay: 'אין משימות',
+    recurrenceLabel: 'משימה חוזרת / תדירות',
+    recurrenceNone: 'ללא חזרה',
+    recurrenceDaily: 'יומי',
+    recurrenceWeekly: 'שבועי',
+    recurrenceMonthly: 'חודשי',
+    recurrenceYearly: 'שנתי',
+    recurrenceCustom: 'מרווח מותאם אישית',
+    recurrenceIntervalDaysLabel: 'חזור כל',
+    recurrenceUnitDays: 'ימים',
+    recurrenceUnitWeeks: 'שבועות',
+    recurrenceUnitMonths: 'חודשים',
+    recurrenceUnitYears: 'שנים',
+    recurrenceEveryPrefix: 'כל',
+    recurringNextSpawnedToast: 'הושלם! המשימה החוזרת הבאה נוצרה אוטומטית.',
+    saveAsTemplateButton: 'שמור כתבנית',
+    templateSavedToast: 'מבנה המשימה נשמר כתבנית לשימוש חוזר!',
+    loadFromTemplateLabel: 'מילוי מהיר מתבנית שמורה',
+    selectTemplatePlaceholder: 'בחר תבנית שמורה...',
+    applyTemplateButton: 'החל תבנית',
+    deleteTemplateButton: 'מחק תבנית',
+    pinnedSectionTitle: 'נעוצים ומועדפים',
+    pinItemButton: 'נעץ בראש',
+    unpinItemButton: 'בטל נעיצה',
+    customTagsLabel: 'תגיות צבע מותאמות',
+    addTagPlaceholder: 'תגית חדשה (למשל: דחוף, ביקור אתר)...',
+    addTagButton: 'הוסף תגית',
+    filterByTagLabel: 'סנן לפי תגית',
+    allTagsFilter: 'כל התגיות',
+    driveAutoSyncLabel: 'גיבוי אוטומטי בעת שינוי',
+    driveAutoSyncDesc: 'סנכרן שינויים אוטומטית ברקע לתיקיית Google Drive שנבחרה בכל הוספה או עריכה של משימות.',
+    driveCheckNewerBackupButton: 'בדוק אם קיים גיבוי חדש יותר ב-Drive',
+    driveNewerBackupFoundTitle: 'נמצא גיבוי חדש יותר ב-Google Drive',
+    driveUpToDateToast: 'סביבת העבודה המקומית שלך מעודכנת מול Google Drive.',
+    driveAutoSyncedBadge: 'סנכרון אוטומטי פעיל',
+    exportFolderPdfButton: 'ייצוא PDF לתיקייה',
+    exportExcelCsvButton: 'ייצוא Excel / CSV',
+    batchSelectModeButton: 'בחירה מרובה',
+    exitBatchSelectButton: 'סיום בחירה',
+    selectedTasksCountLabel: 'נבחרו',
+    selectAllTasksButton: 'בחר הכל',
+    clearSelectionButton: 'נקה',
+    batchApplyStatusLabel: 'קבע סטטוס...',
+    batchApplyPriorityLabel: 'קבע עדיפות...',
+    batchApplyDueDateLabel: 'קבע תאריך יעד',
+    batchMoveToGroupLabel: 'העבר לקבוצה...',
+    batchDeleteSelectedButton: 'העבר נבחרים לסל המיחזור',
+    batchUpdatedToast: 'העדכון המרובה הוחל על המשימות שנבחרו',
   },
 };
 

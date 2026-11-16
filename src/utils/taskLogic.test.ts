@@ -854,3 +854,272 @@ test('moveTaskToGroup and moveProjectToFolder move tasks and cascade group folde
   assert.equal(moveTaskToGroup(afterGroupMove, 'missing', 'prj-b1'), afterGroupMove);
   assert.equal(moveProjectToFolder(afterGroupMove, 'prj-a1', 'missing'), afterGroupMove);
 });
+
+test('Calendar month/week grid builders and rescheduleTaskDueDate update due dates cleanly', async () => {
+  const {
+    buildCalendarMonthDays,
+    buildCalendarWeekDays,
+    rescheduleTaskDueDate,
+  } = await import('./taskLogic.ts');
+
+  const nov2026 = buildCalendarMonthDays(2026, 10); // November 2026 (0-indexed month 10)
+  assert.equal(nov2026.length, 42);
+  assert.equal(nov2026[0].dateStr, '2026-11-01');
+  assert.equal(nov2026[0].isCurrentMonth, true);
+
+  const weekCells = buildCalendarWeekDays('2026-11-18');
+  assert.equal(weekCells.length, 7);
+  assert.equal(weekCells.some((c) => c.dateStr === '2026-11-18'), true);
+
+  const state: WorkspaceState = {
+    folders: [{ id: 'fld-1', name: 'Main', createdAt: '2026-11-01T00:00:00Z' }],
+    projects: [
+      { id: 'prj-1', folderId: 'fld-1', name: 'Core', description: '', createdAt: '2026-11-01T00:00:00Z' },
+    ],
+    tasks: [makeMockTask({ id: 'tsk-cal', dueDate: '2026-11-15', dueTime: '09:00' })],
+  };
+
+  const updated = rescheduleTaskDueDate(state, 'tsk-cal', '2026-11-22', '14:30', '2026-11-16T10:00:00Z');
+  assert.equal(updated.tasks[0].dueDate, '2026-11-22');
+  assert.equal(updated.tasks[0].dueTime, '14:30');
+  assert.equal(updated.tasks[0].updatedAt, '2026-11-16T10:00:00Z');
+});
+
+test('Recurring tasks compute next due dates (daily, weekly, monthly, yearly, custom days/weeks/months/years) and spawn fresh unchecked instances on completion', async () => {
+  const {
+    computeNextDueDate,
+    completeAndSpawnRecurringTask,
+    formatRecurrenceSummary,
+    batchUpdateTasks,
+  } = await import('./taskLogic.ts');
+
+  assert.equal(computeNextDueDate('2026-11-15', { frequency: 'daily' }), '2026-11-16');
+  assert.equal(computeNextDueDate('2026-11-15', { frequency: 'weekly' }), '2026-11-22');
+  assert.equal(computeNextDueDate('2026-11-15', { frequency: 'monthly' }), '2026-12-15');
+  assert.equal(computeNextDueDate('2026-01-31', { frequency: 'monthly' }), '2026-02-28');
+  assert.equal(computeNextDueDate('2026-11-15', { frequency: 'yearly' }), '2027-11-15');
+  assert.equal(computeNextDueDate('2024-02-29', { frequency: 'yearly' }), '2025-02-28');
+
+  // Custom intervals in days, weeks, months, years
+  assert.equal(
+    computeNextDueDate('2026-11-15', { frequency: 'custom', interval: 10, customUnit: 'days' }),
+    '2026-11-25'
+  );
+  assert.equal(
+    computeNextDueDate('2026-11-15', { frequency: 'custom', intervalDays: 10 }),
+    '2026-11-25'
+  );
+  assert.equal(
+    computeNextDueDate('2026-11-15', { frequency: 'custom', interval: 3, customUnit: 'weeks' }),
+    '2026-12-06'
+  );
+  assert.equal(
+    computeNextDueDate('2026-11-15', { frequency: 'custom', interval: 4, customUnit: 'months' }),
+    '2027-03-15'
+  );
+  assert.equal(
+    computeNextDueDate('2026-11-15', { frequency: 'custom', interval: 2, customUnit: 'years' }),
+    '2028-11-15'
+  );
+  assert.equal(computeNextDueDate('2026-11-15', { frequency: 'none' }), null);
+
+  // formatRecurrenceSummary formatting
+  assert.equal(formatRecurrenceSummary({ frequency: 'yearly' }), 'Yearly');
+  assert.equal(
+    formatRecurrenceSummary({ frequency: 'custom', interval: 3, customUnit: 'weeks' }),
+    'Every 3 Weeks'
+  );
+  assert.equal(
+    formatRecurrenceSummary({ frequency: 'custom', interval: 6, customUnit: 'months' }),
+    'Every 6 Months'
+  );
+  assert.equal(
+    formatRecurrenceSummary({ frequency: 'custom', interval: 2, customUnit: 'years' }),
+    'Every 2 Years'
+  );
+
+  const recTask = makeMockTask({
+    id: 'tsk-rec',
+    title: 'Weekly Safety Audit',
+    dueDate: '2026-11-15',
+    recurrence: { frequency: 'weekly' },
+    todos: [
+      {
+        id: 'td-1',
+        title: 'Inspect fire extinguishers',
+        completed: true,
+        createdAt: '2026-11-01T00:00:00Z',
+        subTodos: [
+          {
+            id: 'sub-1',
+            todoId: 'td-1',
+            title: 'Floor 1',
+            completed: true,
+            createdAt: '2026-11-01T00:00:00Z',
+          },
+        ],
+      },
+    ],
+  });
+
+  const state: WorkspaceState = {
+    folders: [{ id: 'fld-1', name: 'Main', createdAt: '2026-11-01T00:00:00Z' }],
+    projects: [
+      { id: 'prj-1', folderId: 'fld-1', name: 'Core', description: '', createdAt: '2026-11-01T00:00:00Z' },
+    ],
+    tasks: [recTask],
+  };
+
+  const res = completeAndSpawnRecurringTask(state, 'tsk-rec', '2026-11-15T12:00:00Z');
+  assert.ok(res.spawnedTask);
+  assert.equal(res.state.tasks.length, 2);
+  assert.equal(res.spawnedTask!.dueDate, '2026-11-22');
+  assert.equal(res.spawnedTask!.status, 'todo');
+  assert.equal(res.spawnedTask!.todos[0].completed, false);
+  assert.equal(res.spawnedTask!.todos[0].subTodos![0].completed, false);
+
+  // Also test batchUpdateTasks marking a custom-months recurring task completed spawns next occurrence
+  const customMonthsTask = makeMockTask({
+    id: 'tsk-rec-months',
+    title: 'Bi-Monthly Calibration',
+    status: 'in_progress',
+    dueDate: '2026-11-15',
+    recurrence: { frequency: 'custom', interval: 2, customUnit: 'months' },
+    todos: [
+      {
+        id: 'td-m1',
+        title: 'Calibrate sensors',
+        completed: false,
+        createdAt: '2026-11-01T00:00:00Z',
+        subTodos: [],
+      },
+    ],
+  });
+  const batchState = batchUpdateTasks(
+    { ...state, tasks: [customMonthsTask] },
+    ['tsk-rec-months'],
+    { status: 'completed' },
+    '2026-11-15T14:00:00Z'
+  );
+  assert.equal(batchState.tasks.length, 2);
+  const spawnedFromBatch = batchState.tasks.find((t) => t.id !== 'tsk-rec-months')!;
+  assert.equal(spawnedFromBatch.dueDate, '2027-01-15');
+  assert.equal(spawnedFromBatch.status, 'todo');
+  assert.equal(spawnedFromBatch.todos[0].completed, false);
+});
+
+test('Task templates can be saved from an existing task, instantiated in one click, and deleted', async () => {
+  const {
+    createTemplateFromTask,
+    instantiateTaskFromTemplate,
+    deleteTaskTemplate,
+    getBuiltInTaskTemplates,
+  } = await import('./taskLogic.ts');
+
+  const builtIns = getBuiltInTaskTemplates();
+  assert.equal(builtIns.length >= 2, true);
+
+  let state: WorkspaceState = {
+    folders: [{ id: 'fld-1', name: 'Main', createdAt: '2026-11-01T00:00:00Z' }],
+    projects: [
+      { id: 'prj-1', folderId: 'fld-1', name: 'Core', description: '', createdAt: '2026-11-01T00:00:00Z' },
+    ],
+    tasks: [makeMockTask({ id: 'tsk-source', title: 'Release Checklist' })],
+  };
+
+  const created = createTemplateFromTask(state, state.tasks[0], 'Custom Release Template');
+  state = created.state;
+  assert.equal(created.createdTemplate.name, 'Custom Release Template');
+  assert.equal(created.createdTemplate.todos.length, 2);
+
+  const newTask = instantiateTaskFromTemplate(
+    created.createdTemplate,
+    'fld-1',
+    'prj-1',
+    'Core',
+    '2026-11-30',
+    '11:00'
+  );
+  assert.equal(newTask.title, 'Custom Release Template');
+  assert.equal(newTask.todos.length, 2);
+  assert.equal(newTask.todos.every((td) => !td.completed), true);
+
+  const countBefore = state.templates!.length;
+  state = deleteTaskTemplate(state, created.createdTemplate.id);
+  assert.equal(state.templates!.length, countBefore - 1);
+});
+
+test('Pinning, custom color tags, batch actions, and CSV report builder work accurately', async () => {
+  const {
+    togglePinTask,
+    togglePinProject,
+    addTagToTask,
+    removeTagFromTask,
+    collectAllWorkspaceTags,
+    batchUpdateTasks,
+    batchMoveTasksToTrash,
+    buildTasksCsvReport,
+    searchWorkspace,
+  } = await import('./taskLogic.ts');
+
+  let task1 = makeMockTask({ id: 'tsk-1', title: 'Alpha Task' });
+  task1 = addTagToTask(task1, 'Urgent', 'rose');
+  task1 = addTagToTask(task1, 'Client Approval', 'blue');
+  assert.equal(task1.tags?.length, 2);
+
+  const task2 = makeMockTask({ id: 'tsk-2', title: 'Beta Task' });
+
+  let state: WorkspaceState = {
+    folders: [{ id: 'fld-1', name: 'Engineering', createdAt: '2026-11-01T00:00:00Z' }],
+    projects: [
+      {
+        id: 'prj-1',
+        folderId: 'fld-1',
+        name: 'Mobile Core',
+        description: '',
+        createdAt: '2026-11-01T00:00:00Z',
+      },
+    ],
+    tasks: [task1, task2],
+  };
+
+  // Global search matches custom tag label
+  const tagSearch = searchWorkspace(state, 'Client Approval', 'en');
+  assert.equal(tagSearch.length, 1);
+  assert.equal(tagSearch[0].matchedField, 'tag');
+
+  // Collect tags
+  assert.equal(collectAllWorkspaceTags(state.tasks).length, 2);
+
+  // Remove tag
+  const removedTagTask = removeTagFromTask(task1, task1.tags![0].id);
+  assert.equal(removedTagTask.tags?.length, 1);
+
+  // Pinning
+  state = togglePinTask(state, 'tsk-1');
+  state = togglePinProject(state, 'prj-1');
+  assert.equal(state.tasks[0].pinned, true);
+  assert.equal(state.projects[0].pinned, true);
+
+  // Batch update
+  state = batchUpdateTasks(state, ['tsk-1', 'tsk-2'], {
+    status: 'completed',
+    priority: 'critical',
+    dueDate: '2026-12-01',
+  });
+  assert.equal(state.tasks.every((t) => t.status === 'completed'), true);
+  assert.equal(state.tasks.every((t) => t.priority === 'critical'), true);
+  assert.equal(state.tasks.every((t) => t.dueDate === '2026-12-01'), true);
+
+  // CSV Report
+  const csv = buildTasksCsvReport(state.tasks, state.projects, state.folders);
+  assert.equal(csv.includes('Folder,Project Group,Task Title'), true);
+  assert.equal(csv.includes('Alpha Task'), true);
+  assert.equal(csv.includes('Beta Task'), true);
+
+  // Batch move to trash
+  state = batchMoveTasksToTrash(state, ['tsk-1', 'tsk-2']);
+  assert.equal(state.tasks.length, 0);
+  assert.equal(state.trash?.length, 2);
+});
+
