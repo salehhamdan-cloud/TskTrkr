@@ -101,15 +101,55 @@ export function clearGoogleDriveMeta(): GoogleDriveBackupMeta {
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
-const provider = new GoogleAuthProvider();
-SCOPES.forEach((scope) => provider.addScope(scope));
-provider.setCustomParameters({ prompt: 'consent select_account' });
+function createDriveAuthProvider(forceConsent = true): GoogleAuthProvider {
+  const authProvider = new GoogleAuthProvider();
+  SCOPES.forEach((scope) => authProvider.addScope(scope));
+  authProvider.setCustomParameters({
+    prompt: forceConsent ? 'consent' : 'select_account',
+    include_granted_scopes: 'true',
+  });
+  return authProvider;
+}
 
 // Strictly in-memory OAuth access token cache (never stored in localStorage or sessionStorage)
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
 let cachedDriveUser: DriveAuthUserInfo | null = null;
 let preferDirectGisFallback = false;
+
+export function createInsufficientScopeError(): Error {
+  const err = new Error('INSUFFICIENT_SCOPE');
+  (err as any).code = 'INSUFFICIENT_SCOPE';
+  return err;
+}
+
+export async function revokeGoogleToken(token: string | null): Promise<void> {
+  if (!token) return;
+  try {
+    if (typeof window !== 'undefined' && (window as any).google?.accounts?.oauth2?.revoke) {
+      await new Promise<void>((resolve) => {
+        try {
+          (window as any).google.accounts.oauth2.revoke(token, () => resolve());
+        } catch {
+          resolve();
+        }
+      });
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    await fetch(
+      `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }
+    );
+  } catch {
+    // ignore network error on revoke
+  }
+}
 
 export function preloadGoogleIdentityScript(): void {
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
@@ -155,27 +195,82 @@ async function ensureGisScriptLoaded(): Promise<any> {
   return (window as any).google.accounts.oauth2;
 }
 
-async function fetchDriveUserProfile(token: string): Promise<DriveAuthUserInfo> {
+async function verifyAndFetchDriveUserProfile(
+  token: string,
+  fallbackUser?: DriveAuthUserInfo
+): Promise<DriveAuthUserInfo> {
+  // 1. Check tokeninfo endpoint to verify that Drive scope was actually granted
   try {
-    const res = await fetch(
-      'https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)',
-      { headers: { Authorization: `Bearer ${token}` } }
+    const infoRes = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(token)}`
     );
-    if (res.ok) {
-      const data = (await res.json()) as {
-        user?: { displayName?: string; emailAddress?: string };
-      };
-      if (data.user) {
-        return {
-          email: data.user.emailAddress || data.user.displayName || 'Google Drive User',
-          displayName: data.user.displayName || data.user.emailAddress || 'Google Account',
-        };
+    if (infoRes.ok) {
+      const infoData = (await infoRes.json()) as { scope?: string; email?: string };
+      const grantedScopes = (infoData.scope || '').split(/\s+/).filter(Boolean);
+      const hasDriveScope = grantedScopes.some((s) => s.includes('/auth/drive'));
+      if (grantedScopes.length > 0 && !hasDriveScope) {
+        await revokeGoogleToken(token);
+        throw createInsufficientScopeError();
       }
     }
-  } catch {
-    // ignore profile fetch failure
+  } catch (err: any) {
+    if (err?.code === 'INSUFFICIENT_SCOPE') {
+      throw err;
+    }
+    // If tokeninfo fails due to network, fall through to Drive v3 about check
   }
-  return { email: 'Google Drive Connected', displayName: 'Google Account' };
+
+  // 2. Verify against Google Drive v3 about endpoint and retrieve profile
+  const res = await fetch(
+    'https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)',
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  if (res.status === 401) {
+    cachedAccessToken = null;
+    const err = new Error('AUTH_EXPIRED');
+    (err as any).code = 'AUTH_EXPIRED';
+    throw err;
+  }
+
+  if (res.status === 403) {
+    const text = await res.text().catch(() => '');
+    if (
+      text.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') ||
+      text.includes('insufficientPermissions') ||
+      text.includes('Insufficient Permission')
+    ) {
+      await revokeGoogleToken(token);
+      throw createInsufficientScopeError();
+    }
+  }
+
+  if (res.ok) {
+    const data = (await res.json()) as {
+      user?: { displayName?: string; emailAddress?: string };
+    };
+    if (data.user) {
+      return {
+        email:
+          data.user.emailAddress ||
+          fallbackUser?.email ||
+          data.user.displayName ||
+          'Google Drive User',
+        displayName:
+          data.user.displayName ||
+          fallbackUser?.displayName ||
+          data.user.emailAddress ||
+          'Google Account',
+      };
+    }
+  }
+
+  return (
+    fallbackUser || {
+      email: 'Google Drive Connected',
+      displayName: 'Google Account',
+    }
+  );
 }
 
 export function requestGisAccessTokenDirect(): Promise<{
@@ -192,15 +287,47 @@ export function requestGisAccessTokenDirect(): Promise<{
       const tokenClient = oauth2.initTokenClient({
         client_id: GOOGLE_OAUTH_CLIENT_ID,
         scope: SCOPES.join(' '),
-        callback: async (tokenResponse: { access_token?: string; error?: string }) => {
+        include_granted_scopes: true,
+        callback: async (tokenResponse: {
+          access_token?: string;
+          error?: string;
+          scope?: string;
+        }) => {
           if (tokenResponse.error || !tokenResponse.access_token) {
+            if (tokenResponse.error === 'access_denied') {
+              reject(createInsufficientScopeError());
+              return;
+            }
             reject(createDomainAuthError(tokenResponse.error));
             return;
           }
-          cachedAccessToken = tokenResponse.access_token;
-          const userInfo = await fetchDriveUserProfile(cachedAccessToken);
-          cachedDriveUser = userInfo;
-          resolve({ userInfo, accessToken: cachedAccessToken });
+
+          if (
+            typeof oauth2.hasGrantedAnyScope === 'function' &&
+            !oauth2.hasGrantedAnyScope(
+              tokenResponse,
+              'https://www.googleapis.com/auth/drive',
+              'https://www.googleapis.com/auth/drive.file'
+            )
+          ) {
+            await revokeGoogleToken(tokenResponse.access_token);
+            cachedAccessToken = null;
+            reject(createInsufficientScopeError());
+            return;
+          }
+
+          try {
+            const userInfo = await verifyAndFetchDriveUserProfile(
+              tokenResponse.access_token
+            );
+            cachedAccessToken = tokenResponse.access_token;
+            cachedDriveUser = userInfo;
+            resolve({ userInfo, accessToken: cachedAccessToken });
+          } catch (verifyErr) {
+            cachedAccessToken = null;
+            cachedDriveUser = null;
+            reject(verifyErr);
+          }
         },
         error_callback: (err: { type?: string }) => {
           if (err?.type === 'popup_failed_to_open') {
@@ -214,7 +341,7 @@ export function requestGisAccessTokenDirect(): Promise<{
           }
         },
       });
-      tokenClient.requestAccessToken({ prompt: 'consent select_account' });
+      tokenClient.requestAccessToken({ prompt: 'consent' });
     } catch {
       reject(createDomainAuthError());
     }
@@ -245,7 +372,10 @@ export function initGoogleDriveAuth(
       const info: DriveAuthUserInfo = user
         ? {
             email: user.email || cachedDriveUser?.email || 'Google Drive User',
-            displayName: user.displayName || cachedDriveUser?.displayName || 'Google Account',
+            displayName:
+              user.displayName ||
+              cachedDriveUser?.displayName ||
+              'Google Account',
           }
         : cachedDriveUser || {
             email: 'Google Drive Connected',
@@ -272,29 +402,64 @@ export function initGoogleDriveAuth(
   });
 }
 
-export async function signInWithGoogleDrive(): Promise<{
+export async function signInWithGoogleDrive(
+  forceConsent = true
+): Promise<{
   userInfo: DriveAuthUserInfo;
   accessToken: string;
 }> {
   if (preferDirectGisFallback && (window as any).google?.accounts?.oauth2) {
-    return requestGisAccessTokenDirect();
+    try {
+      return await requestGisAccessTokenDirect();
+    } catch (gisErr: any) {
+      if (
+        gisErr?.code === 'INSUFFICIENT_SCOPE' ||
+        gisErr?.code === 'POPUP_BLOCKED'
+      ) {
+        throw gisErr;
+      }
+      // If direct GIS failed due to origin config, fall through to Firebase popup with forced consent
+      preferDirectGisFallback = false;
+    }
   }
 
   try {
     isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
+    const authProvider = createDriveAuthProvider(forceConsent);
+    const result = await signInWithPopup(auth, authProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (!credential?.accessToken) {
       throw new Error('Failed to obtain Google Drive access token.');
     }
-    cachedAccessToken = credential.accessToken;
-    const userInfo: DriveAuthUserInfo = {
-      email: result.user.email || result.user.displayName || 'Google Drive User',
-      displayName: result.user.displayName || result.user.email || 'Google Account',
+
+    const fallbackUserInfo: DriveAuthUserInfo = {
+      email:
+        result.user.email || result.user.displayName || 'Google Drive User',
+      displayName:
+        result.user.displayName || result.user.email || 'Google Account',
     };
-    cachedDriveUser = userInfo;
-    return { userInfo, accessToken: cachedAccessToken };
+
+    try {
+      const verifiedUser = await verifyAndFetchDriveUserProfile(
+        credential.accessToken,
+        fallbackUserInfo
+      );
+      cachedAccessToken = credential.accessToken;
+      cachedDriveUser = verifiedUser;
+      return { userInfo: verifiedUser, accessToken: cachedAccessToken };
+    } catch (scopeErr: any) {
+      cachedAccessToken = null;
+      cachedDriveUser = null;
+      if (scopeErr?.code === 'INSUFFICIENT_SCOPE') {
+        preferDirectGisFallback = true;
+        await auth.signOut().catch(() => {});
+      }
+      throw scopeErr;
+    }
   } catch (error: any) {
+    if (error?.code === 'INSUFFICIENT_SCOPE') {
+      throw error;
+    }
     const code = error?.code || '';
     const msg = String(error?.message || '');
     if (
@@ -302,12 +467,14 @@ export async function signInWithGoogleDrive(): Promise<{
       msg.includes('auth/unauthorized-domain')
     ) {
       preferDirectGisFallback = true;
-      // Attempt Google Identity Services OAuth client fallback if already loaded/allowed by OAuth client
       try {
         await ensureGisScriptLoaded();
         return await requestGisAccessTokenDirect();
       } catch (gisErr: any) {
-        if (gisErr?.code === 'POPUP_BLOCKED') {
+        if (
+          gisErr?.code === 'POPUP_BLOCKED' ||
+          gisErr?.code === 'INSUFFICIENT_SCOPE'
+        ) {
           throw gisErr;
         }
         throw createDomainAuthError('auth/unauthorized-domain');
@@ -332,12 +499,8 @@ export async function signOutGoogleDrive(): Promise<void> {
   const tokenToRevoke = cachedAccessToken;
   cachedAccessToken = null;
   cachedDriveUser = null;
-  if (tokenToRevoke && (window as any).google?.accounts?.oauth2?.revoke) {
-    try {
-      (window as any).google.accounts.oauth2.revoke(tokenToRevoke, () => {});
-    } catch {
-      // ignore revoke error
-    }
+  if (tokenToRevoke) {
+    await revokeGoogleToken(tokenToRevoke);
   }
   await auth.signOut().catch(() => {});
 }
@@ -349,13 +512,31 @@ function escapeDriveQueryLiteral(value: string): string {
 async function assertDriveOk(res: Response): Promise<Response> {
   if (res.status === 401) {
     cachedAccessToken = null;
+    cachedDriveUser = null;
     const err = new Error('AUTH_EXPIRED');
     (err as any).code = 'AUTH_EXPIRED';
     throw err;
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`Google Drive API error (${res.status}): ${text || res.statusText}`);
+    if (
+      res.status === 403 &&
+      (text.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') ||
+        text.includes('insufficientPermissions') ||
+        text.includes('Insufficient Permission'))
+    ) {
+      const badToken = cachedAccessToken;
+      cachedAccessToken = null;
+      cachedDriveUser = null;
+      preferDirectGisFallback = true;
+      if (badToken) {
+        void revokeGoogleToken(badToken);
+      }
+      throw createInsufficientScopeError();
+    }
+    throw new Error(
+      `Google Drive API error (${res.status}): ${text || res.statusText}`
+    );
   }
   return res;
 }
@@ -363,38 +544,57 @@ async function assertDriveOk(res: Response): Promise<Response> {
 export async function listDriveFolders(
   token: string,
   parentFolderId = 'root',
-  searchQuery = ''
+  searchQuery = '',
+  showAllFolders = false
 ): Promise<DriveFolderEntry[]> {
   const escapedParent = escapeDriveQueryLiteral(parentFolderId || 'root');
   const trimmedSearch = searchQuery.trim();
-  const qParts = [
+
+  const fetchWithQuery = async (q: string): Promise<DriveFolderEntry[]> => {
+    const params = new URLSearchParams({
+      q,
+      fields: 'files(id,name,modifiedTime)',
+      orderBy: 'name',
+      pageSize: '100',
+      supportsAllDrives: 'true',
+      includeItemsFromAllDrives: 'true',
+    });
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    await assertDriveOk(res);
+    const data = (await res.json()) as { files?: DriveFolderEntry[] };
+    return Array.isArray(data.files) ? data.files : [];
+  };
+
+  const baseParts = [
     "mimeType = 'application/vnd.google-apps.folder'",
     'trashed = false',
   ];
+
   if (trimmedSearch) {
-    qParts.push(`name contains '${escapeDriveQueryLiteral(trimmedSearch)}'`);
-  } else {
-    qParts.push(`'${escapedParent}' in parents`);
+    baseParts.push(`name contains '${escapeDriveQueryLiteral(trimmedSearch)}'`);
+    return fetchWithQuery(baseParts.join(' and '));
   }
 
-  const params = new URLSearchParams({
-    q: qParts.join(' and '),
-    fields: 'files(id,name,modifiedTime)',
-    orderBy: 'name',
-    pageSize: '100',
-    supportsAllDrives: 'true',
-    includeItemsFromAllDrives: 'true',
-  });
+  if (showAllFolders) {
+    return fetchWithQuery(baseParts.join(' and '));
+  }
 
-  const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    }
+  const scopedQuery = [...baseParts, `'${escapedParent}' in parents`].join(
+    ' and '
   );
-  await assertDriveOk(res);
-  const data = (await res.json()) as { files?: DriveFolderEntry[] };
-  return Array.isArray(data.files) ? data.files : [];
+  const scopedFolders = await fetchWithQuery(scopedQuery);
+
+  // If browsing root and 0 folders returned under 'root' in parents, automatically fall back to listing all folders in Drive
+  if (scopedFolders.length === 0 && (parentFolderId === 'root' || !parentFolderId)) {
+    return fetchWithQuery(baseParts.join(' and '));
+  }
+
+  return scopedFolders;
 }
 
 export async function createDriveFolder(

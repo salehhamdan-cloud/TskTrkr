@@ -342,6 +342,16 @@ export interface TranslationDictionary {
   drivePopupBlockedHint: string;
   driveRetryDirectSignInButton: string;
   driveFreeTierNote: string;
+  driveInsufficientScopeTitle: string;
+  driveInsufficientScopeDesc: string;
+  driveGrantPermissionButton: string;
+  driveSelectFolderRowButton: string;
+  driveOpenSubfoldersButton: string;
+  driveUseSelectedFolderButton: string;
+  driveAllFoldersTab: string;
+  driveCurrentFolderTab: string;
+  driveQuickCreateBackupFolderButton: string;
+  driveFolderSelectedSuccess: string;
 }
 
 export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
@@ -681,6 +691,16 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     drivePopupBlockedHint: 'Browser blocked the automatic sign-in window. Tap below to open Google Sign-In directly.',
     driveRetryDirectSignInButton: 'Retry Direct Google Sign-In',
     driveFreeTierNote: 'Free service ($0): Google Drive API & Google Sign-In (up to 50,000 monthly users) have no fee—only uses your existing 15 GB free Google Drive storage.',
+    driveInsufficientScopeTitle: 'Google Drive Permission Required (Checkbox Not Checked)',
+    driveInsufficientScopeDesc: 'You signed in with Google, but Google Drive access was not granted. Click the button below, and in the Google consent window, make sure to CHECK THE BOX next to "See, edit, create, and delete all of your Google Drive files" before clicking Continue.',
+    driveGrantPermissionButton: 'Grant Google Drive Permission',
+    driveSelectFolderRowButton: 'Select Folder',
+    driveOpenSubfoldersButton: 'Open',
+    driveUseSelectedFolderButton: 'Use Selected Folder',
+    driveAllFoldersTab: 'All Drive Folders',
+    driveCurrentFolderTab: 'Current Folder',
+    driveQuickCreateBackupFolderButton: 'Create & Select "TaskTracker_Backup" Folder',
+    driveFolderSelectedSuccess: 'Google Drive backup folder selected successfully.',
   },
   ar: {
     appName: 'متتبع المهام',
@@ -1018,6 +1038,16 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     drivePopupBlockedHint: 'حظر المتصفح نافذة تسجيل الدخول التلقائية. اضغط أدناه لفتح نافذة تسجيل الدخول مباشرة.',
     driveRetryDirectSignInButton: 'إعادة المحاولة لتسجيل دخول Google',
     driveFreeTierNote: 'خدمة مجانية بالكامل (0$): واجهة Google Drive وتسجيل الدخول بحساب Google مجانية تماماً وتستخدم فقط مساحة Drive الخاصة بك (15 جيجابايت مجاناً).',
+    driveInsufficientScopeTitle: 'مطلوب منح صلاحية الوصول إلى Google Drive (تحديد المربع)',
+    driveInsufficientScopeDesc: 'تم تسجيل الدخول بحساب Google ولكن لم يتم منح صلاحية Google Drive. اضغط على الزر أدناه، وفي نافذة موافقة Google تأكد من وضع علامة صح (✓) بجانب صلاحية الوصول لملفات Google Drive قبل الضغط على متابعة (Continue).',
+    driveGrantPermissionButton: 'منح صلاحية Google Drive الآن',
+    driveSelectFolderRowButton: 'اختيار المجلد',
+    driveOpenSubfoldersButton: 'فتح',
+    driveUseSelectedFolderButton: 'اعتماد المجلد المحدد',
+    driveAllFoldersTab: 'كل مجلدات Drive',
+    driveCurrentFolderTab: 'المجلد الحالي',
+    driveQuickCreateBackupFolderButton: 'إنشاء واختيار مجلد "TaskTracker_Backup"',
+    driveFolderSelectedSuccess: 'تم اختيار مجلد النسخ الاحتياطي في Google Drive بنجاح.',
   },
   he: {
     appName: 'מעקב משימות Task Tracker',
@@ -1355,6 +1385,16 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     drivePopupBlockedHint: 'הדפדפן חסם את חלון ההתחברות האוטומטי. לחץ למטה לפתיחת ההתחברות ישירות.',
     driveRetryDirectSignInButton: 'נסה שוב התחברות ישירה עם Google',
     driveFreeTierNote: 'שירות חינמי ($0): ה-API של Google Drive והתחברות Google הם בחינם לחלוטין ומשתמשים רק באחסון Google Drive הקיים שלך (15GB חינם).',
+    driveInsufficientScopeTitle: 'נדרשת הרשאת גישה ל-Google Drive (סימון תיבת האישור)',
+    driveInsufficientScopeDesc: 'התחברת עם Google, אך הרשאת הגישה ל-Google Drive לא סומנה. לחץ על הכפתור למטה, ובחלון האישור של Google הקפד לסמן ב-V (✓) את תיבת ההרשאה של Google Drive לפני לחיצה על המשך (Continue).',
+    driveGrantPermissionButton: 'הענק הרשאת Google Drive כעת',
+    driveSelectFolderRowButton: 'בחר תיקייה',
+    driveOpenSubfoldersButton: 'פתח',
+    driveUseSelectedFolderButton: 'השתמש בתיקייה שנבחרה',
+    driveAllFoldersTab: 'כל תיקיות Drive',
+    driveCurrentFolderTab: 'תיקייה נוכחית',
+    driveQuickCreateBackupFolderButton: 'צור ובחר תיקיית "TaskTracker_Backup"',
+    driveFolderSelectedSuccess: 'תיקיית הגיבוי ב-Google Drive נבחרה בהצלחה.',
   },
 };
 

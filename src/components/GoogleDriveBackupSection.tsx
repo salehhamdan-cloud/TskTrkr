@@ -40,10 +40,8 @@ import {
   listDriveFolders,
   loadGoogleDriveMeta,
   preloadGoogleIdentityScript,
-  requestGisAccessTokenDirect,
   saveGoogleDriveMeta,
   scanDriveFolderForBackup,
-  shouldPreferDirectGisAuth,
   signInWithGoogleDrive,
   signOutGoogleDrive,
   uploadOrOverwriteBackupInDriveFolder,
@@ -84,6 +82,7 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
 
   const [authDomainError, setAuthDomainError] = useState<string | null>(null);
   const [popupBlockedError, setPopupBlockedError] = useState(false);
+  const [insufficientScopeError, setInsufficientScopeError] = useState(false);
   const [copiedDomain, setCopiedDomain] = useState(false);
 
   const [driveFeedback, setDriveFeedback] = useState<{
@@ -93,6 +92,7 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
 
   // Google Drive Folder Picker Modal state
   const [isDrivePickerOpen, setIsDrivePickerOpen] = useState(false);
+  const [showAllFolders, setShowAllFolders] = useState(false);
   const [breadcrumbs, setBreadcrumbs] = useState<
     Array<{ id: string; name: string }>
   >([{ id: 'root', name: t.myDriveRootLabel }]);
@@ -143,6 +143,7 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
         setNeedsAuth(false);
         setAuthDomainError(null);
         setPopupBlockedError(false);
+        setInsufficientScopeError(false);
       },
       (user) => {
         setAuthUser(user);
@@ -157,6 +158,22 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
     const msg = err instanceof Error ? err.message : String(err);
 
     if (
+      code === 'INSUFFICIENT_SCOPE' ||
+      msg === 'INSUFFICIENT_SCOPE' ||
+      msg.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') ||
+      msg.includes('insufficientPermissions') ||
+      msg.includes('Insufficient Permission')
+    ) {
+      setNeedsAuth(true);
+      setIsDrivePickerOpen(false);
+      setInsufficientScopeError(true);
+      setPopupBlockedError(false);
+      setAuthDomainError(null);
+      setDriveFeedback(null);
+      return true;
+    }
+
+    if (
       code === 'UNAUTHORIZED_DOMAIN' ||
       code === 'auth/unauthorized-domain' ||
       msg.startsWith('UNAUTHORIZED_DOMAIN:') ||
@@ -167,6 +184,7 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
         (typeof window !== 'undefined' ? window.location.hostname : '');
       setAuthDomainError(host || 'localhost');
       setPopupBlockedError(false);
+      setInsufficientScopeError(false);
       setDriveFeedback(null);
       return true;
     }
@@ -197,12 +215,12 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
     setDriveFeedback(null);
     setAuthDomainError(null);
     setPopupBlockedError(false);
+    setInsufficientScopeError(false);
     try {
-      const result = shouldPreferDirectGisAuth()
-        ? await requestGisAccessTokenDirect()
-        : await signInWithGoogleDrive();
+      const result = await signInWithGoogleDrive(true);
       setAuthUser(result.userInfo);
       setNeedsAuth(false);
+      setInsufficientScopeError(false);
       return result.accessToken;
     } catch (err) {
       handleAuthError(err);
@@ -216,13 +234,13 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
     setIsLoggingIn(true);
     setDriveFeedback(null);
     setPopupBlockedError(false);
+    setInsufficientScopeError(false);
     try {
-      const result = shouldPreferDirectGisAuth()
-        ? await requestGisAccessTokenDirect()
-        : await signInWithGoogleDrive();
+      const result = await signInWithGoogleDrive(true);
       setAuthUser(result.userInfo);
       setNeedsAuth(false);
       setAuthDomainError(null);
+      setInsufficientScopeError(false);
     } catch (err) {
       handleAuthError(err);
     } finally {
@@ -252,16 +270,23 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
     setDriveFeedback(null);
     setAuthDomainError(null);
     setPopupBlockedError(false);
+    setInsufficientScopeError(false);
   };
 
   const fetchFoldersForDirectory = async (
     token: string,
     parentId: string,
-    searchText = ''
+    searchText = '',
+    allFoldersMode = showAllFolders
   ) => {
     setIsLoadingFolders(true);
     try {
-      const items = await listDriveFolders(token, parentId, searchText);
+      const items = await listDriveFolders(
+        token,
+        parentId,
+        searchText,
+        allFoldersMode
+      );
       setDriveFolders(items);
     } catch (err) {
       handleAuthError(err);
@@ -307,12 +332,30 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
     setBreadcrumbs([{ id: 'root', name: t.myDriveRootLabel }]);
     setPendingSelectFolder({ id: startId, name: startName });
     setFolderSearchQuery('');
+    setShowAllFolders(false);
+    setDriveFeedback(null);
     setIsDrivePickerOpen(true);
 
     await Promise.all([
-      fetchFoldersForDirectory(token, 'root', ''),
+      fetchFoldersForDirectory(token, 'root', '', false),
       runDriveFolderScan(token, startId, startName),
     ]);
+  };
+
+  const handleToggleAllFolders = async (nextAllMode: boolean) => {
+    setShowAllFolders(nextAllMode);
+    const token = getGoogleDriveAccessToken();
+    if (!token) {
+      setNeedsAuth(true);
+      return;
+    }
+    const currentParent = breadcrumbs[breadcrumbs.length - 1]?.id || 'root';
+    await fetchFoldersForDirectory(
+      token,
+      currentParent,
+      folderSearchQuery,
+      nextAllMode
+    );
   };
 
   const handleNavigateIntoFolder = async (folder: DriveFolderEntry) => {
@@ -321,11 +364,12 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
       setNeedsAuth(true);
       return;
     }
+    setShowAllFolders(false);
     setBreadcrumbs((prev) => [...prev, { id: folder.id, name: folder.name }]);
     setPendingSelectFolder({ id: folder.id, name: folder.name });
     setFolderSearchQuery('');
     await Promise.all([
-      fetchFoldersForDirectory(token, folder.id, ''),
+      fetchFoldersForDirectory(token, folder.id, '', false),
       runDriveFolderScan(token, folder.id, folder.name),
     ]);
   };
@@ -336,6 +380,7 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
       setNeedsAuth(true);
       return;
     }
+    setShowAllFolders(false);
     const nextTrail = breadcrumbs.slice(0, idx + 1);
     const target = nextTrail[nextTrail.length - 1] || {
       id: 'root',
@@ -345,7 +390,7 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
     setPendingSelectFolder({ id: target.id, name: target.name });
     setFolderSearchQuery('');
     await Promise.all([
-      fetchFoldersForDirectory(token, target.id, ''),
+      fetchFoldersForDirectory(token, target.id, '', false),
       runDriveFolderScan(token, target.id, target.name),
     ]);
   };
@@ -358,7 +403,63 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
       return;
     }
     const currentParent = breadcrumbs[breadcrumbs.length - 1]?.id || 'root';
-    await fetchFoldersForDirectory(token, currentParent, folderSearchQuery);
+    await fetchFoldersForDirectory(
+      token,
+      currentParent,
+      folderSearchQuery,
+      showAllFolders
+    );
+  };
+
+  // Confirm any folder (either by direct row click or modal footer button)
+  const handleConfirmFolderById = async (
+    targetId: string,
+    targetName: string
+  ) => {
+    const token = getGoogleDriveAccessToken();
+    if (!token) {
+      setNeedsAuth(true);
+      setIsDrivePickerOpen(false);
+      return;
+    }
+
+    const cleanId = targetId || 'root';
+    const cleanName = targetName || t.myDriveRootLabel;
+
+    // Immediately save selected folder metadata so picking a folder always succeeds
+    const saved = saveGoogleDriveMeta({
+      ...driveMeta,
+      isConfigured: true,
+      folderId: cleanId,
+      folderName: cleanName,
+    });
+    setDriveMeta(saved);
+    setPendingSelectFolder({ id: cleanId, name: cleanName });
+
+    const scanRes = await runDriveFolderScan(token, cleanId, cleanName);
+    setIsDrivePickerOpen(false);
+    setDriveFeedback({
+      type: 'success',
+      message: `${t.driveFolderSelectedSuccess} (${cleanName})`,
+    });
+
+    if (scanRes && scanRes.hasBackup && scanRes.backup) {
+      setPendingDriveRestoreConfirm({
+        folderId: cleanId,
+        folderName: cleanName,
+        backup: scanRes.backup,
+        existingFileId: scanRes.existingAutosaveFileId,
+      });
+      return;
+    }
+
+    // Prompt user to confirm uploading current workspace backup to the selected Drive folder
+    setPendingDriveUploadConfirm({
+      folderId: cleanId,
+      folderName: cleanName,
+      existingFileId: scanRes?.existingAutosaveFileId || null,
+      willOverwrite: Boolean(scanRes?.existingAutosaveFileId),
+    });
   };
 
   const handleCreateNewDriveFolder = async (e: React.FormEvent) => {
@@ -379,10 +480,27 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
       );
       setNewDriveFolderName('');
       setPendingSelectFolder({ id: created.id, name: created.name });
+      // Save newly created folder as active target right away
+      const saved = saveGoogleDriveMeta({
+        ...driveMeta,
+        isConfigured: true,
+        folderId: created.id,
+        folderName: created.name,
+      });
+      setDriveMeta(saved);
       await Promise.all([
-        fetchFoldersForDirectory(token, currentParent, folderSearchQuery),
+        fetchFoldersForDirectory(
+          token,
+          currentParent,
+          folderSearchQuery,
+          showAllFolders
+        ),
         runDriveFolderScan(token, created.id, created.name),
       ]);
+      setDriveFeedback({
+        type: 'success',
+        message: `${t.driveFolderSelectedSuccess} (${created.name})`,
+      });
     } catch (err) {
       handleAuthError(err);
     } finally {
@@ -390,43 +508,33 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
     }
   };
 
-  // Confirm folder picked in modal -> if backup exists, prompt confirm before deleting local data & loading
-  const handleSelectPickerFolder = async () => {
+  const handleQuickCreateDefaultBackupFolder = async () => {
     const token = getGoogleDriveAccessToken();
     if (!token) {
       setNeedsAuth(true);
       return;
     }
-    const targetId = pendingSelectFolder.id || 'root';
-    const targetName = pendingSelectFolder.name || t.myDriveRootLabel;
-    const scanRes = await runDriveFolderScan(token, targetId, targetName);
-    if (!scanRes) return;
-
-    if (scanRes.hasBackup && scanRes.backup) {
-      setPendingDriveRestoreConfirm({
-        folderId: targetId,
-        folderName: targetName,
-        backup: scanRes.backup,
-        existingFileId: scanRes.existingAutosaveFileId,
-      });
-      return;
+    const currentParent = breadcrumbs[breadcrumbs.length - 1]?.id || 'root';
+    setIsCreatingFolder(true);
+    try {
+      const created = await createDriveFolder(
+        token,
+        'TaskTracker_Backup',
+        currentParent
+      );
+      await handleConfirmFolderById(created.id, created.name);
+    } catch (err) {
+      handleAuthError(err);
+    } finally {
+      setIsCreatingFolder(false);
     }
+  };
 
-    const saved = saveGoogleDriveMeta({
-      ...driveMeta,
-      isConfigured: true,
-      folderId: targetId,
-      folderName: targetName,
-    });
-    setDriveMeta(saved);
-    setIsDrivePickerOpen(false);
-    // Ask user to confirm before uploading initial backup file to Drive
-    setPendingDriveUploadConfirm({
-      folderId: targetId,
-      folderName: targetName,
-      existingFileId: scanRes.existingAutosaveFileId,
-      willOverwrite: Boolean(scanRes.existingAutosaveFileId),
-    });
+  const handleSelectPickerFolder = async () => {
+    await handleConfirmFolderById(
+      pendingSelectFolder.id || 'root',
+      pendingSelectFolder.name || t.myDriveRootLabel
+    );
   };
 
   const handleRequestDriveBackupUpload = async () => {
@@ -742,6 +850,39 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
         </div>
       )}
 
+      {/* Insufficient Google Drive Scope Troubleshooting Card (403 ACCESS_TOKEN_SCOPE_INSUFFICIENT) */}
+      {insufficientScopeError && (
+        <div
+          data-testid="gdrive-insufficient-scope-card"
+          className="rounded-xl border border-amber-300 dark:border-amber-700/80 bg-amber-50/95 dark:bg-amber-950/45 p-4 space-y-3"
+        >
+          <div className="flex items-start gap-2.5">
+            <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1 space-y-1">
+              <h3 className="text-xs font-bold text-amber-950 dark:text-amber-200">
+                {t.driveInsufficientScopeTitle}
+              </h3>
+              <p className="text-xs text-amber-900 dark:text-amber-300 leading-relaxed">
+                {t.driveInsufficientScopeDesc}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+            <button
+              type="button"
+              data-testid="grant-drive-permission-btn"
+              onClick={handleRetryDirectSignIn}
+              disabled={isLoggingIn}
+              className="h-9 px-4 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white inline-flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-60"
+            >
+              <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+              <span>{t.driveGrantPermissionButton}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Actionable Unauthorized Domain Troubleshooting Card */}
       {authDomainError && (
         <div
@@ -885,27 +1026,72 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5">
-              {/* Breadcrumbs */}
-              <div className="flex flex-wrap items-center gap-1 text-xs">
-                {breadcrumbs.map((bc, idx) => (
-                  <React.Fragment key={bc.id}>
-                    {idx > 0 && (
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-400 rtl:rotate-180 shrink-0" />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleBreadcrumbClick(idx)}
-                      className={`px-2 py-1 rounded-md transition-colors cursor-pointer ${
-                        idx === breadcrumbs.length - 1
-                          ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-semibold'
-                          : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      {bc.name}
-                    </button>
-                  </React.Fragment>
-                ))}
+              {/* View Mode Switcher + Breadcrumbs */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1 text-xs">
+                  {breadcrumbs.map((bc, idx) => (
+                    <React.Fragment key={bc.id}>
+                      {idx > 0 && (
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-400 rtl:rotate-180 shrink-0" />
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleBreadcrumbClick(idx)}
+                        className={`px-2 py-1 rounded-md transition-colors cursor-pointer ${
+                          !showAllFolders && idx === breadcrumbs.length - 1
+                            ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-semibold'
+                            : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        {bc.name}
+                      </button>
+                    </React.Fragment>
+                  ))}
+                </div>
+
+                <div className="inline-flex items-center rounded-lg border border-slate-200 dark:border-slate-800 p-0.5 bg-slate-100/80 dark:bg-slate-950 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleAllFolders(false)}
+                    className={`px-2 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
+                      !showAllFolders
+                        ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-2xs'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    {t.driveCurrentFolderTab}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleAllFolders(true)}
+                    className={`px-2 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
+                      showAllFolders
+                        ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-2xs'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    {t.driveAllFoldersTab}
+                  </button>
+                </div>
               </div>
+
+              {/* In-modal error/status feedback */}
+              {driveFeedback && (
+                <div
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border ${
+                    driveFeedback.type === 'success'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/60 text-rose-700 dark:text-rose-300'
+                  }`}
+                >
+                  {driveFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                  )}
+                  <span>{driveFeedback.message}</span>
+                </div>
+              )}
 
               {/* Live Drive Folder Scan Status */}
               {isScanningDrive ? (
@@ -977,8 +1163,18 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
                     <span>{t.scanningFolderLabel}</span>
                   </div>
                 ) : driveFolders.length === 0 ? (
-                  <div className="py-5 text-center text-xs text-slate-500 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-                    {t.driveNoFoldersFound}
+                  <div className="py-4 px-3 text-center text-xs text-slate-500 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl space-y-2.5">
+                    <div>{t.driveNoFoldersFound}</div>
+                    <button
+                      type="button"
+                      data-testid="quick-create-backup-folder-btn"
+                      onClick={handleQuickCreateDefaultBackupFolder}
+                      disabled={isCreatingFolder}
+                      className="h-8 px-3 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5 shrink-0" />
+                      <span>{t.driveQuickCreateBackupFolderButton}</span>
+                    </button>
                   </div>
                 ) : (
                   driveFolders.map((folder) => {
@@ -1015,14 +1211,30 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
                             {folder.name}
                           </span>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleNavigateIntoFolder(folder)}
-                          title={t.expandSection}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-200/60 dark:hover:bg-slate-800 cursor-pointer shrink-0"
-                        >
-                          <ChevronRight className="w-3.5 h-3.5 rtl:rotate-180" />
-                        </button>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleNavigateIntoFolder(folder)}
+                            title={t.driveOpenSubfoldersButton}
+                            className="h-7 px-2 rounded-lg text-[11px] font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800 inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>{t.driveOpenSubfoldersButton}</span>
+                            <ChevronRight className="w-3 h-3 rtl:rotate-180" />
+                          </button>
+
+                          <button
+                            type="button"
+                            data-testid={`select-drive-folder-${folder.id}`}
+                            onClick={() =>
+                              handleConfirmFolderById(folder.id, folder.name)
+                            }
+                            className="h-7 px-2.5 rounded-lg text-[11px] font-semibold bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Check className="w-3 h-3 shrink-0" />
+                            <span>{t.driveSelectFolderRowButton}</span>
+                          </button>
+                        </div>
                       </div>
                     );
                   })
@@ -1069,7 +1281,9 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
                 className="h-9 px-4 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                <span>{pendingSelectFolder.name}</span>
+                <span>
+                  {t.driveUseSelectedFolderButton}: {pendingSelectFolder.name}
+                </span>
               </button>
             </div>
           </div>
