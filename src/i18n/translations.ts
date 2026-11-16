@@ -333,6 +333,15 @@ export interface TranslationDictionary {
   driveBackupSavedSuccess: string;
   driveAuthExpiredError: string;
   driveNoFoldersFound: string;
+  driveUnauthorizedDomainTitle: string;
+  driveUnauthorizedDomainDesc: string;
+  driveCurrentDomainLabel: string;
+  driveCopyDomainButton: string;
+  driveCopiedBadge: string;
+  driveOpenFirebaseDomainsButton: string;
+  drivePopupBlockedHint: string;
+  driveRetryDirectSignInButton: string;
+  driveFreeTierNote: string;
 }
 
 export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
@@ -663,6 +672,15 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     driveBackupSavedSuccess: 'Workspace backup saved to your Google Drive folder successfully.',
     driveAuthExpiredError: 'Google Drive session expired. Please sign in with Google again.',
     driveNoFoldersFound: 'No subfolders found in this Google Drive location.',
+    driveUnauthorizedDomainTitle: 'Domain Not Authorized Yet for Google Sign-In',
+    driveUnauthorizedDomainDesc: 'Google / Firebase Sign-In requires your current app domain to be listed under Firebase Console → Authentication → Settings → Authorized domains. Copy the domain below and add it once:',
+    driveCurrentDomainLabel: 'Current App Domain',
+    driveCopyDomainButton: 'Copy Domain',
+    driveCopiedBadge: 'Copied',
+    driveOpenFirebaseDomainsButton: 'Open Firebase Authorized Domains',
+    drivePopupBlockedHint: 'Browser blocked the automatic sign-in window. Tap below to open Google Sign-In directly.',
+    driveRetryDirectSignInButton: 'Retry Direct Google Sign-In',
+    driveFreeTierNote: 'Free service ($0): Google Drive API & Google Sign-In (up to 50,000 monthly users) have no fee—only uses your existing 15 GB free Google Drive storage.',
   },
   ar: {
     appName: 'متتبع المهام',
@@ -991,6 +1009,15 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     driveBackupSavedSuccess: 'تم حفظ النسخة الاحتياطية في مجلد Google Drive بنجاح.',
     driveAuthExpiredError: 'انتهت جلسة Google Drive. يرجى تسجيل الدخول بحساب Google مرة أخرى.',
     driveNoFoldersFound: 'لا توجد مجلدات فرعية في هذا الموقع داخل Google Drive.',
+    driveUnauthorizedDomainTitle: 'نطاق التطبيق غير مصرح به بعد لتسجيل دخول Google',
+    driveUnauthorizedDomainDesc: 'يتطلب تسجيل الدخول إضافة نطاق التطبيق الحالي مرة واحدة في Firebase Console ← Authentication ← Settings ← Authorized domains. انسخ النطاق أدناه وأضفه:',
+    driveCurrentDomainLabel: 'نطاق التطبيق الحالي',
+    driveCopyDomainButton: 'نسخ النطاق',
+    driveCopiedBadge: 'تم النسخ',
+    driveOpenFirebaseDomainsButton: 'فتح النطاقات المصرح بها في Firebase',
+    drivePopupBlockedHint: 'حظر المتصفح نافذة تسجيل الدخول التلقائية. اضغط أدناه لفتح نافذة تسجيل الدخول مباشرة.',
+    driveRetryDirectSignInButton: 'إعادة المحاولة لتسجيل دخول Google',
+    driveFreeTierNote: 'خدمة مجانية بالكامل (0$): واجهة Google Drive وتسجيل الدخول بحساب Google مجانية تماماً وتستخدم فقط مساحة Drive الخاصة بك (15 جيجابايت مجاناً).',
   },
   he: {
     appName: 'מעקב משימות Task Tracker',
@@ -1319,6 +1346,15 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     driveBackupSavedSuccess: 'הגיבוי נשמר בהצלחה בתיקיית Google Drive שלך.',
     driveAuthExpiredError: 'החיבור ל-Google Drive פג תוקף. אנא התחבר שוב עם Google.',
     driveNoFoldersFound: 'לא נמצאו תיקיות משנה במיקום זה ב-Google Drive.',
+    driveUnauthorizedDomainTitle: 'הדומיין טרם אושר לכניסת Google',
+    driveUnauthorizedDomainDesc: 'כניסת Google / Firebase דורשת להוסיף את דומיין האפליקציה הנוכחי תחת Firebase Console → Authentication → Settings → Authorized domains. העתק את הדומיין למטה והוסף אותו פעם אחת:',
+    driveCurrentDomainLabel: 'דומיין נוכחי',
+    driveCopyDomainButton: 'העתק דומיין',
+    driveCopiedBadge: 'הועתק',
+    driveOpenFirebaseDomainsButton: 'פתח דומיינים מורשים ב-Firebase',
+    drivePopupBlockedHint: 'הדפדפן חסם את חלון ההתחברות האוטומטי. לחץ למטה לפתיחת ההתחברות ישירות.',
+    driveRetryDirectSignInButton: 'נסה שוב התחברות ישירה עם Google',
+    driveFreeTierNote: 'שירות חינמי ($0): ה-API של Google Drive והתחברות Google הם בחינם לחלוטין ומשתמשים רק באחסון Google Drive הקיים שלך (15GB חינם).',
   },
 };
 

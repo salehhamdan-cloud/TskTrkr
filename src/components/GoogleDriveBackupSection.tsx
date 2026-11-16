@@ -1,20 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { User } from 'firebase/auth';
 import {
   AlertCircle,
   AlertTriangle,
+  Check,
   CheckCircle2,
   ChevronRight,
   Cloud,
   CloudUpload,
+  Copy,
   Download,
+  ExternalLink,
   FileJson,
   Folder,
   FolderOpen,
   FolderPlus,
   Loader2,
   LogOut,
+  RefreshCw,
   Search,
+  ShieldAlert,
   X,
 } from 'lucide-react';
 import { LanguageCode, WorkspaceState } from '../types/task';
@@ -27,14 +31,19 @@ import {
 } from '../utils/localFolderSync';
 import {
   createDriveFolder,
+  DriveAuthUserInfo,
   DriveFolderEntry,
+  FIREBASE_PROJECT_ID,
   getGoogleDriveAccessToken,
   GoogleDriveBackupMeta,
   initGoogleDriveAuth,
   listDriveFolders,
   loadGoogleDriveMeta,
+  preloadGoogleIdentityScript,
+  requestGisAccessTokenDirect,
   saveGoogleDriveMeta,
   scanDriveFolderForBackup,
+  shouldPreferDirectGisAuth,
   signInWithGoogleDrive,
   signOutGoogleDrive,
   uploadOrOverwriteBackupInDriveFolder,
@@ -67,11 +76,15 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
   const [driveMeta, setDriveMeta] = useState<GoogleDriveBackupMeta>(() =>
     loadGoogleDriveMeta()
   );
-  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authUser, setAuthUser] = useState<DriveAuthUserInfo | null>(null);
   const [needsAuth, setNeedsAuth] = useState<boolean>(
     () => !getGoogleDriveAccessToken()
   );
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const [authDomainError, setAuthDomainError] = useState<string | null>(null);
+  const [popupBlockedError, setPopupBlockedError] = useState(false);
+  const [copiedDomain, setCopiedDomain] = useState(false);
 
   const [driveFeedback, setDriveFeedback] = useState<{
     type: 'success' | 'error';
@@ -123,10 +136,13 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
   } | null>(null);
 
   useEffect(() => {
+    preloadGoogleIdentityScript();
     const unsubscribe = initGoogleDriveAuth(
       (user) => {
         setAuthUser(user);
         setNeedsAuth(false);
+        setAuthDomainError(null);
+        setPopupBlockedError(false);
       },
       (user) => {
         setAuthUser(user);
@@ -137,8 +153,36 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
   }, []);
 
   const handleAuthError = (err: unknown) => {
+    const code = (err as any)?.code || '';
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg === 'AUTH_EXPIRED' || (err as any)?.code === 'AUTH_EXPIRED') {
+
+    if (
+      code === 'UNAUTHORIZED_DOMAIN' ||
+      code === 'auth/unauthorized-domain' ||
+      msg.startsWith('UNAUTHORIZED_DOMAIN:') ||
+      msg.includes('auth/unauthorized-domain')
+    ) {
+      const host =
+        (err as any)?.domain ||
+        (typeof window !== 'undefined' ? window.location.hostname : '');
+      setAuthDomainError(host || 'localhost');
+      setPopupBlockedError(false);
+      setDriveFeedback(null);
+      return true;
+    }
+
+    if (
+      code === 'POPUP_BLOCKED' ||
+      code === 'auth/popup-blocked' ||
+      msg === 'POPUP_BLOCKED' ||
+      msg.includes('auth/popup-blocked')
+    ) {
+      setPopupBlockedError(true);
+      setDriveFeedback(null);
+      return true;
+    }
+
+    if (msg === 'AUTH_EXPIRED' || code === 'AUTH_EXPIRED') {
       setNeedsAuth(true);
       setIsDrivePickerOpen(false);
       setDriveFeedback({ type: 'error', message: t.driveAuthExpiredError });
@@ -151,9 +195,13 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
   const handleSignIn = async (): Promise<string | null> => {
     setIsLoggingIn(true);
     setDriveFeedback(null);
+    setAuthDomainError(null);
+    setPopupBlockedError(false);
     try {
-      const result = await signInWithGoogleDrive();
-      setAuthUser(result.user);
+      const result = shouldPreferDirectGisAuth()
+        ? await requestGisAccessTokenDirect()
+        : await signInWithGoogleDrive();
+      setAuthUser(result.userInfo);
       setNeedsAuth(false);
       return result.accessToken;
     } catch (err) {
@@ -164,12 +212,46 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
     }
   };
 
+  const handleRetryDirectSignIn = async () => {
+    setIsLoggingIn(true);
+    setDriveFeedback(null);
+    setPopupBlockedError(false);
+    try {
+      const result = shouldPreferDirectGisAuth()
+        ? await requestGisAccessTokenDirect()
+        : await signInWithGoogleDrive();
+      setAuthUser(result.userInfo);
+      setNeedsAuth(false);
+      setAuthDomainError(null);
+    } catch (err) {
+      handleAuthError(err);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleCopyDomain = async () => {
+    const domainToCopy =
+      authDomainError ||
+      (typeof window !== 'undefined' ? window.location.hostname : '');
+    if (!domainToCopy) return;
+    try {
+      await navigator.clipboard.writeText(domainToCopy);
+      setCopiedDomain(true);
+      window.setTimeout(() => setCopiedDomain(false), 2000);
+    } catch {
+      // Clipboard API unavailable in restricted frame
+    }
+  };
+
   const handleSignOut = async () => {
     await signOutGoogleDrive();
     setAuthUser(null);
     setNeedsAuth(true);
     setIsDrivePickerOpen(false);
     setDriveFeedback(null);
+    setAuthDomainError(null);
+    setPopupBlockedError(false);
   };
 
   const fetchFoldersForDirectory = async (
@@ -519,44 +601,53 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
 
       {/* Authentication Row: Official Sign in with Google button OR connected account */}
       {!hasActiveToken ? (
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          <button
-            type="button"
-            data-testid="google-drive-signin-btn"
-            onClick={handleSignIn}
-            disabled={isLoggingIn}
-            className="gsi-material-button inline-flex items-center gap-2.5 h-10 px-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-2xs text-xs font-semibold transition-colors cursor-pointer disabled:opacity-60"
+        <div className="space-y-3 pt-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              data-testid="google-drive-signin-btn"
+              onClick={handleSignIn}
+              disabled={isLoggingIn}
+              className="gsi-material-button inline-flex items-center gap-2.5 h-10 px-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/80 shadow-2xs text-xs font-semibold transition-colors cursor-pointer disabled:opacity-60"
+            >
+              <div className="gsi-material-button-icon w-4.5 h-4.5 shrink-0">
+                <svg
+                  version="1.1"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 48 48"
+                  style={{ display: 'block', width: '100%', height: '100%' }}
+                >
+                  <path
+                    fill="#EA4335"
+                    d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+                  />
+                  <path
+                    fill="#4285F4"
+                    d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+                  />
+                  <path fill="none" d="M0 0h48v48H0z" />
+                </svg>
+              </div>
+              <span className="gsi-material-button-contents">
+                {isLoggingIn ? '...' : t.signInWithGoogleButton}
+              </span>
+            </button>
+          </div>
+
+          <p
+            data-testid="drive-free-tier-note"
+            className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed"
           >
-            <div className="gsi-material-button-icon w-4.5 h-4.5 shrink-0">
-              <svg
-                version="1.1"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 48 48"
-                style={{ display: 'block', width: '100%', height: '100%' }}
-              >
-                <path
-                  fill="#EA4335"
-                  d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-                />
-                <path
-                  fill="#4285F4"
-                  d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-                />
-                <path fill="none" d="M0 0h48v48H0z" />
-              </svg>
-            </div>
-            <span className="gsi-material-button-contents">
-              {isLoggingIn ? '...' : t.signInWithGoogleButton}
-            </span>
-          </button>
+            {t.driveFreeTierNote}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -648,6 +739,98 @@ export const GoogleDriveBackupSection: React.FC<GoogleDriveBackupSectionProps> =
               <span>{t.signOutGoogleButton}</span>
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Actionable Unauthorized Domain Troubleshooting Card */}
+      {authDomainError && (
+        <div
+          data-testid="gdrive-unauthorized-domain-card"
+          className="rounded-xl border border-amber-200 dark:border-amber-800/70 bg-amber-50/90 dark:bg-amber-950/35 p-4 space-y-3"
+        >
+          <div className="flex items-start gap-2.5">
+            <ShieldAlert className="w-4.5 h-4.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1 space-y-1">
+              <h3 className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                {t.driveUnauthorizedDomainTitle}
+              </h3>
+              <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                {t.driveUnauthorizedDomainDesc}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white dark:bg-slate-950 border border-amber-200/80 dark:border-amber-900/60">
+            <div className="min-w-0">
+              <span className="block text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                {t.driveCurrentDomainLabel}
+              </span>
+              <code className="text-xs font-mono font-semibold text-slate-800 dark:text-slate-100 break-all">
+                {authDomainError}
+              </code>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopyDomain}
+              className="h-8 px-2.5 rounded-md text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              {copiedDomain ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{t.driveCopiedBadge}</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{t.driveCopyDomainButton}</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={`https://console.firebase.google.com/project/${FIREBASE_PROJECT_ID}/authentication/settings`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="h-8 px-3 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white inline-flex items-center gap-1.5 transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+              <span>{t.driveOpenFirebaseDomainsButton}</span>
+            </a>
+
+            <button
+              type="button"
+              onClick={handleRetryDirectSignIn}
+              disabled={isLoggingIn}
+              className="h-8 px-3 rounded-lg text-xs font-semibold border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40 inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+            >
+              <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+              <span>{t.driveRetryDirectSignInButton}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Popup Blocked Banner with Direct Retry */}
+      {popupBlockedError && (
+        <div
+          data-testid="gdrive-popup-blocked-card"
+          className="rounded-xl border border-blue-200 dark:border-blue-800/70 bg-blue-50/90 dark:bg-blue-950/40 p-3.5 flex flex-wrap items-center justify-between gap-3"
+        >
+          <div className="flex items-center gap-2 text-xs text-blue-800 dark:text-blue-200">
+            <AlertCircle className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />
+            <span>{t.drivePopupBlockedHint}</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleRetryDirectSignIn}
+            disabled={isLoggingIn}
+            className="h-8 px-3 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-60"
+          >
+            <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+            <span>{t.driveRetryDirectSignInButton}</span>
+          </button>
         </div>
       )}
 

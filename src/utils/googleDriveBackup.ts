@@ -17,6 +17,13 @@ import {
 
 export const SCOPES = ['https://www.googleapis.com/auth/drive'];
 export const GDRIVE_BACKUP_META_KEY = 'masar_gdrive_backup_meta_v1';
+export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
+export const GOOGLE_OAUTH_CLIENT_ID = firebaseConfig.oAuthClientId;
+
+export interface DriveAuthUserInfo {
+  email: string;
+  displayName: string;
+}
 
 export interface GoogleDriveBackupMeta {
   isConfigured: boolean;
@@ -101,30 +108,178 @@ provider.setCustomParameters({ prompt: 'consent select_account' });
 // Strictly in-memory OAuth access token cache (never stored in localStorage or sessionStorage)
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
+let cachedDriveUser: DriveAuthUserInfo | null = null;
+let preferDirectGisFallback = false;
+
+export function preloadGoogleIdentityScript(): void {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return;
+  if ((window as any).google?.accounts?.oauth2) return;
+  const existing = document.getElementById('masar-google-gsi-script');
+  if (existing) return;
+  const script = document.createElement('script');
+  script.id = 'masar-google-gsi-script';
+  script.src = 'https://accounts.google.com/gsi/client';
+  script.async = true;
+  script.defer = true;
+  document.head.appendChild(script);
+}
+
+async function ensureGisScriptLoaded(): Promise<any> {
+  const win = window as any;
+  if (win.google?.accounts?.oauth2) {
+    return win.google.accounts.oauth2;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const existing = document.getElementById('masar-google-gsi-script') as HTMLScriptElement | null;
+    if (existing) {
+      if ((window as any).google?.accounts?.oauth2) {
+        resolve();
+        return;
+      }
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error('GSI_LOAD_FAILED')), { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.id = 'masar-google-gsi-script';
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('GSI_LOAD_FAILED'));
+    document.head.appendChild(script);
+  });
+  if (!(window as any).google?.accounts?.oauth2) {
+    throw new Error('GSI_LOAD_FAILED');
+  }
+  return (window as any).google.accounts.oauth2;
+}
+
+async function fetchDriveUserProfile(token: string): Promise<DriveAuthUserInfo> {
+  try {
+    const res = await fetch(
+      'https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)',
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (res.ok) {
+      const data = (await res.json()) as {
+        user?: { displayName?: string; emailAddress?: string };
+      };
+      if (data.user) {
+        return {
+          email: data.user.emailAddress || data.user.displayName || 'Google Drive User',
+          displayName: data.user.displayName || data.user.emailAddress || 'Google Account',
+        };
+      }
+    }
+  } catch {
+    // ignore profile fetch failure
+  }
+  return { email: 'Google Drive Connected', displayName: 'Google Account' };
+}
+
+export function requestGisAccessTokenDirect(): Promise<{
+  userInfo: DriveAuthUserInfo;
+  accessToken: string;
+}> {
+  const oauth2 = (window as any).google?.accounts?.oauth2;
+  if (!oauth2 || !GOOGLE_OAUTH_CLIENT_ID) {
+    return Promise.reject(createDomainAuthError());
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const tokenClient = oauth2.initTokenClient({
+        client_id: GOOGLE_OAUTH_CLIENT_ID,
+        scope: SCOPES.join(' '),
+        callback: async (tokenResponse: { access_token?: string; error?: string }) => {
+          if (tokenResponse.error || !tokenResponse.access_token) {
+            reject(createDomainAuthError(tokenResponse.error));
+            return;
+          }
+          cachedAccessToken = tokenResponse.access_token;
+          const userInfo = await fetchDriveUserProfile(cachedAccessToken);
+          cachedDriveUser = userInfo;
+          resolve({ userInfo, accessToken: cachedAccessToken });
+        },
+        error_callback: (err: { type?: string }) => {
+          if (err?.type === 'popup_failed_to_open') {
+            const popErr = new Error('POPUP_BLOCKED');
+            (popErr as any).code = 'POPUP_BLOCKED';
+            reject(popErr);
+          } else if (err?.type === 'popup_closed') {
+            reject(new Error('Sign-in popup was closed.'));
+          } else {
+            reject(createDomainAuthError(err?.type));
+          }
+        },
+      });
+      tokenClient.requestAccessToken({ prompt: 'consent select_account' });
+    } catch {
+      reject(createDomainAuthError());
+    }
+  });
+}
+
+function createDomainAuthError(detail?: string): Error {
+  const host =
+    typeof window !== 'undefined' ? window.location.hostname : 'unknown';
+  const err = new Error(
+    `UNAUTHORIZED_DOMAIN:${host}${detail ? ` (${detail})` : ''}`
+  );
+  (err as any).code = 'UNAUTHORIZED_DOMAIN';
+  (err as any).domain = host;
+  return err;
+}
+
+export function shouldPreferDirectGisAuth(): boolean {
+  return preferDirectGisFallback;
+}
 
 export function initGoogleDriveAuth(
-  onAuthSuccess?: (user: User, token: string) => void,
-  onAuthFailure?: (user: User | null) => void
+  onAuthSuccess?: (user: DriveAuthUserInfo, token: string) => void,
+  onAuthFailure?: (user: DriveAuthUserInfo | null) => void
 ): () => void {
   return onAuthStateChanged(auth, (user: User | null) => {
+    if (cachedAccessToken) {
+      const info: DriveAuthUserInfo = user
+        ? {
+            email: user.email || cachedDriveUser?.email || 'Google Drive User',
+            displayName: user.displayName || cachedDriveUser?.displayName || 'Google Account',
+          }
+        : cachedDriveUser || {
+            email: 'Google Drive Connected',
+            displayName: 'Google Account',
+          };
+      onAuthSuccess?.(info, cachedAccessToken);
+      return;
+    }
+
     if (user) {
-      if (cachedAccessToken) {
-        onAuthSuccess?.(user, cachedAccessToken);
-      } else if (!isSigningIn) {
+      if (!isSigningIn) {
         cachedAccessToken = null;
-        onAuthFailure?.(user);
+        cachedDriveUser = null;
+        onAuthFailure?.({
+          email: user.email || '',
+          displayName: user.displayName || '',
+        });
       }
     } else {
       cachedAccessToken = null;
+      cachedDriveUser = null;
       onAuthFailure?.(null);
     }
   });
 }
 
 export async function signInWithGoogleDrive(): Promise<{
-  user: User;
+  userInfo: DriveAuthUserInfo;
   accessToken: string;
 }> {
+  if (preferDirectGisFallback && (window as any).google?.accounts?.oauth2) {
+    return requestGisAccessTokenDirect();
+  }
+
   try {
     isSigningIn = true;
     const result = await signInWithPopup(auth, provider);
@@ -133,7 +288,37 @@ export async function signInWithGoogleDrive(): Promise<{
       throw new Error('Failed to obtain Google Drive access token.');
     }
     cachedAccessToken = credential.accessToken;
-    return { user: result.user, accessToken: cachedAccessToken };
+    const userInfo: DriveAuthUserInfo = {
+      email: result.user.email || result.user.displayName || 'Google Drive User',
+      displayName: result.user.displayName || result.user.email || 'Google Account',
+    };
+    cachedDriveUser = userInfo;
+    return { userInfo, accessToken: cachedAccessToken };
+  } catch (error: any) {
+    const code = error?.code || '';
+    const msg = String(error?.message || '');
+    if (
+      code === 'auth/unauthorized-domain' ||
+      msg.includes('auth/unauthorized-domain')
+    ) {
+      preferDirectGisFallback = true;
+      // Attempt Google Identity Services OAuth client fallback if already loaded/allowed by OAuth client
+      try {
+        await ensureGisScriptLoaded();
+        return await requestGisAccessTokenDirect();
+      } catch (gisErr: any) {
+        if (gisErr?.code === 'POPUP_BLOCKED') {
+          throw gisErr;
+        }
+        throw createDomainAuthError('auth/unauthorized-domain');
+      }
+    }
+    if (code === 'auth/popup-blocked' || msg.includes('auth/popup-blocked')) {
+      const popErr = new Error('POPUP_BLOCKED');
+      (popErr as any).code = 'POPUP_BLOCKED';
+      throw popErr;
+    }
+    throw error;
   } finally {
     isSigningIn = false;
   }
@@ -144,8 +329,17 @@ export function getGoogleDriveAccessToken(): string | null {
 }
 
 export async function signOutGoogleDrive(): Promise<void> {
+  const tokenToRevoke = cachedAccessToken;
   cachedAccessToken = null;
-  await auth.signOut();
+  cachedDriveUser = null;
+  if (tokenToRevoke && (window as any).google?.accounts?.oauth2?.revoke) {
+    try {
+      (window as any).google.accounts.oauth2.revoke(tokenToRevoke, () => {});
+    } catch {
+      // ignore revoke error
+    }
+  }
+  await auth.signOut().catch(() => {});
 }
 
 function escapeDriveQueryLiteral(value: string): string {
