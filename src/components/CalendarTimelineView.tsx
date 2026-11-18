@@ -247,10 +247,12 @@ export const CalendarTimelineView: React.FC<CalendarTimelineViewProps> = ({
             <button
               type="button"
               onClick={onOpenNewTaskModal}
-              className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+              aria-label={t.newTaskButton}
+              title={t.newTaskButton}
+              className="h-8 w-8 xl:h-9 xl:w-auto xl:px-3.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white inline-flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{t.newTaskButton}</span>
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden xl:inline">{t.newTaskButton}</span>
             </button>
           </div>
         </div>

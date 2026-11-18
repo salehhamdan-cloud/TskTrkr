@@ -1517,29 +1517,30 @@ export default function App() {
       className="h-dvh w-full max-w-[100vw] overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
     >
       {/* CLEAN MODERN TOP HEADER WITH GLOBAL SEARCH, NOTIFICATIONS, TRASH & SETTINGS */}
-      <header className="shrink-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-2.5 py-2 sm:py-0 sm:px-6 sm:h-14 flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-1.5 gap-y-2 sm:gap-3 w-full max-w-[100vw]">
+      <header className="shrink-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-2.5 py-1.5 sm:py-0 sm:px-4 xl:px-6 sm:h-12 xl:h-14 flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-1.5 gap-y-1.5 sm:gap-2.5 w-full max-w-[100vw]">
         {/* Left / Start: Mobile menu button + App Brand */}
-        <div className="order-1 flex items-center gap-1.5 sm:gap-3 min-w-0 shrink">
+        <div className="order-1 flex items-center gap-1.5 sm:gap-2.5 min-w-0 shrink">
           <button
             type="button"
             data-testid="mobile-menu-btn"
             onClick={() => setIsMobileSidebarOpen(true)}
             aria-label={t.openMenu}
-            className="lg:hidden h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+            title={t.openMenu}
+            className="lg:hidden h-8 w-8 shrink-0 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
           <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
               onClick={() => setSelectedNode({ type: 'dashboard' })}
-              className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate max-w-[115px] xs:max-w-[160px] sm:max-w-none cursor-pointer font-display hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate max-w-[140px] xs:max-w-[190px] sm:max-w-none cursor-pointer font-display hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
             >
               {t.appName}
             </button>
-            <span className="hidden md:inline-block text-slate-300 dark:text-slate-700">|</span>
-            <span className="hidden md:inline-block text-xs text-slate-500 dark:text-slate-400 font-normal truncate max-w-[200px] xl:max-w-none">
+            <span className="hidden xl:inline-block text-slate-300 dark:text-slate-700">|</span>
+            <span className="hidden xl:inline-block text-xs text-slate-500 dark:text-slate-400 font-normal truncate max-w-[200px] 2xl:max-w-none">
               {t.appSubtitle}
             </span>
           </div>
@@ -1576,7 +1577,7 @@ export default function App() {
               }}
               placeholder={t.globalSearchPlaceholder}
               aria-label={t.globalSearchPlaceholder}
-              className="w-full h-8 sm:h-9 ps-9 pe-8 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:bg-white dark:focus:bg-slate-900 transition-colors"
+              className="w-full h-8 xl:h-9 ps-9 pe-8 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:bg-white dark:focus:bg-slate-900 transition-colors"
             />
             {globalSearchQuery && (
               <button
@@ -1652,7 +1653,7 @@ export default function App() {
           )}
         </div>
 
-        {/* Right / End: Lock + New Task (Notifications, Trash, Settings, Theme & Install App live in Side List & Settings) */}
+        {/* Right / End: Lock + New Task (icon-only on mobile & tablet, full label on xl+) */}
         <div className="order-2 sm:order-3 flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Lock App Button */}
           <button
@@ -1661,10 +1662,10 @@ export default function App() {
             onClick={handleLockApp}
             aria-label={t.lockAppButton}
             title={t.lockAppButton}
-            className="h-8 min-w-[32px] px-2 sm:h-9 sm:min-w-[36px] sm:px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer"
+            className="h-8 w-8 xl:h-9 xl:w-auto xl:px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors shrink-0 cursor-pointer"
           >
             <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span className="hidden md:inline">{t.lockAppButton}</span>
+            <span className="hidden xl:inline">{t.lockAppButton}</span>
           </button>
 
           {/* Primary Action: New Task */}
@@ -1679,10 +1680,11 @@ export default function App() {
               })
             }
             aria-label={t.newTaskButton}
-            className="h-8 px-2.5 sm:h-9 sm:px-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+            title={t.newTaskButton}
+            className="h-8 w-8 xl:h-9 xl:w-auto xl:px-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span>{t.newTaskButton}</span>
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="hidden xl:inline">{t.newTaskButton}</span>
           </button>
         </div>
       </header>

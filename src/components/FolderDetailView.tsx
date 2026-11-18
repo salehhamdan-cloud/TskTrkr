@@ -205,8 +205,8 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
             </button>
           </form>
         ) : (
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 mb-4">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-4 mb-4">
+            <div className="flex items-center gap-3 flex-1 min-w-[200px] max-w-full">
               <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                 <Folder className="w-5 h-5" />
               </div>
@@ -220,15 +220,17 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+            <div className="flex flex-wrap items-center gap-1.5 max-w-full">
               <button
                 type="button"
                 data-testid="export-folder-pdf-btn"
                 onClick={() => exportFolderToPdf(folder, projects, folderTasks, lang, t)}
-                className="h-9 px-3 rounded-lg border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 text-xs font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100/80 dark:hover:bg-blue-900/50 inline-flex items-center gap-1.5 cursor-pointer"
+                aria-label={t.exportFolderPdfButton}
+                title={t.exportFolderPdfButton}
+                className="h-8 w-8 xl:h-9 xl:w-auto xl:px-3 rounded-lg border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 text-xs font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100/80 dark:hover:bg-blue-900/50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
               >
                 <FileText className="w-3.5 h-3.5 shrink-0" />
-                <span>{t.exportFolderPdfButton}</span>
+                <span className="hidden xl:inline">{t.exportFolderPdfButton}</span>
               </button>
               <button
                 type="button"
@@ -241,10 +243,12 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
                     `folder_${folder.id}_tasks.csv`
                   )
                 }
-                className="h-9 px-3 rounded-lg border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50/70 dark:bg-emerald-950/40 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/50 inline-flex items-center gap-1.5 cursor-pointer"
+                aria-label={t.exportExcelCsvButton}
+                title={t.exportExcelCsvButton}
+                className="h-8 w-8 xl:h-9 xl:w-auto xl:px-3 rounded-lg border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50/70 dark:bg-emerald-950/40 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
-                <span>{t.exportExcelCsvButton}</span>
+                <span className="hidden xl:inline">{t.exportExcelCsvButton}</span>
               </button>
               <button
                 type="button"
@@ -253,19 +257,21 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
                   setIsEditingFolder(true);
                 }}
                 aria-label={t.editFolder}
-                className="h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 cursor-pointer"
+                title={t.edit}
+                className="h-8 w-8 xl:h-9 xl:w-auto xl:px-3 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
               >
-                <Pencil className="w-3.5 h-3.5" />
-                <span>{t.edit}</span>
+                <Pencil className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden xl:inline">{t.edit}</span>
               </button>
               <button
                 type="button"
                 onClick={() => onDeleteFolder(folder.id)}
                 aria-label={t.deleteFolder}
-                className="h-9 px-3 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 inline-flex items-center gap-1.5 cursor-pointer"
+                title={t.delete}
+                className="h-8 w-8 xl:h-9 xl:w-auto xl:px-3 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{t.delete}</span>
+                <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden xl:inline">{t.delete}</span>
               </button>
             </div>
           </div>
@@ -497,11 +503,11 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
                   </div>
                 ) : (
                   <div>
-                    <div className="flex items-start justify-between gap-4 mb-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2.5 sm:gap-4 mb-3">
                       <button
                         type="button"
                         onClick={() => onSelectNode({ type: 'project', id: proj.id })}
-                        className="text-start flex-1 min-w-0 cursor-pointer group"
+                        className="text-start flex-1 min-w-[180px] max-w-full cursor-pointer group"
                       >
                         <div className="flex items-center gap-2">
                           <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />

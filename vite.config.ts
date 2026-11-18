@@ -11,8 +11,26 @@ export default defineConfig(() => {
     plugins: [
       react(),
       tailwindcss(),
+      {
+        name: 'pwa-register-sw-middleware',
+        configureServer(server) {
+          server.middlewares.use((req, res, next) => {
+            if (req.url && (req.url === '/registerSW.js' || req.url.startsWith('/registerSW.js?'))) {
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+              res.setHeader('Cache-Control', 'no-store');
+              res.end(
+                "if('serviceWorker' in navigator) { navigator.serviceWorker.register('/dev-sw.js?dev-sw', { scope: '/', type: 'classic' }); }\n"
+              );
+              return;
+            }
+            next();
+          });
+        },
+      },
       VitePWA({
         registerType: 'autoUpdate',
+        injectRegister: 'inline',
         includeAssets: [
           'icon.svg',
           'apple-touch-icon.png',
@@ -89,6 +107,7 @@ export default defineConfig(() => {
         devOptions: {
           enabled: true,
           type: 'module',
+          suppressWarnings: true,
         },
       }),
     ],
